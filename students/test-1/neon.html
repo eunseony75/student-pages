@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ko"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>네온 원기단</title>
+  <!-- 실행 조건: 이 파일을 .html로 저장해 HTTPS 웹서버 또는 localhost에서 여세요.
+       카메라 권한은 '카메라 시작' 버튼을 누를 때 요청됩니다.
+       iframe에 게시한다면 호스트 iframe에 allow="camera"가 필요할 수 있습니다.
+       MediaPipe CDN에 접속할 수 있어야 실제 손 인식이 작동합니다. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&amp;family=SUIT:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.577.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#07091a;--panel:#14182f;--line:#343a59;--muted:#a4accb;--cyan:#69f6ff;--purple:#b174ff}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body,button,textarea{font-family:"SUIT",sans-serif}
+    body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 32%,#1b204c 0%,#0c1027 44%,#07091a 80%);color:#f7f8ff}
+    button{cursor:pointer}button:focus-visible,summary:focus-visible,textarea:focus-visible{outline:3px solid #fff;outline-offset:3px}
+    .app{width:min(1240px,100%);margin:auto;padding:27px clamp(18px,4vw,52px) 32px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:16px}.brand{display:flex;align-items:center;gap:13px}.brand-mark{width:39px;height:39px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(140deg,#6afaff,#905afa 65%,#ed66dc);box-shadow:0 0 25px #805aff66;color:#101027}.brand-mark svg{width:23px}.brand-name{font:800 17px "Orbitron",sans-serif}.top-right{font-size:11px;letter-spacing:.15em;font-weight:800;color:#a8b3d8}.top-right span{color:var(--cyan)}
+    .hero{text-align:center;margin:35px auto 20px}.eyebrow{color:#82eefd;font:700 11px "Orbitron",sans-serif;letter-spacing:.3em;margin:0 0 13px}.hero h1{font:800 clamp(38px,6vw,72px)/1.12 "Orbitron",sans-serif;letter-spacing:-.065em;margin:0;text-shadow:0 0 42px #834df166}.hero h1 em{font-style:normal;background:linear-gradient(100deg,#70faff,#b18bff 55%,#ff8ade);background-clip:text;color:transparent}.hero p{color:#b1b8d4;font-size:14px;line-height:1.6;margin:16px 0 0}
+    .game-frame{position:relative;min-height:480px;border:1px solid #444668;border-radius:23px;overflow:hidden;background:radial-gradient(circle at center,#202457 0%,#11142f 37%,#0a0d21 78%);box-shadow:0 25px 80px #0007,inset 0 0 75px #070a20}
+    .game-frame:before{content:"";position:absolute;inset:0;background-image:linear-gradient(#8496e00a 1px,transparent 1px),linear-gradient(90deg,#8496e00a 1px,transparent 1px);background-size:35px 35px;mask-image:radial-gradient(ellipse at center,#000,transparent 78%);pointer-events:none}#fx{position:absolute;inset:0;width:100%;height:100%}
+    .frame-top{position:absolute;left:28px;right:28px;top:26px;display:flex;justify-content:space-between;align-items:flex-start;z-index:2;gap:10px}.pill{border:1px solid #62689477;background:#151a35d9;border-radius:100px;padding:10px 15px;font-size:11px;font-weight:800;color:#cad1ed;display:inline-flex;align-items:center;gap:9px}.dot{width:7px;height:7px;border-radius:50%;background:#66708f}.dot.active{background:#6cf5ff;box-shadow:0 0 12px #6cf5ff}.stage-indicator{display:flex;align-items:center;gap:8px}.stage-indicator b{color:#6df5ff;font:700 12px "Orbitron",sans-serif}.stage-indicator span{color:#8d98bc;font-size:11px}
+    .orb-label{position:absolute;left:0;right:0;bottom:104px;text-align:center;z-index:2;pointer-events:none}.orb-label strong{font:800 clamp(17px,3vw,23px) "Orbitron",sans-serif;display:block;text-shadow:0 0 25px #8d72ff}.orb-label small{display:block;color:#b7c4e3;font-size:12px;margin-top:10px}.frame-bottom{position:absolute;bottom:25px;left:29px;right:29px;display:flex;align-items:end;justify-content:space-between;z-index:3;gap:20px}.charge{width:min(280px,46%)}.charge-head{display:flex;justify-content:space-between;color:#b9c4e3;font-size:11px;font-weight:800;margin-bottom:9px;letter-spacing:.1em}.charge-head b{color:#8cf9ff;font:700 14px "Orbitron",sans-serif}.track{height:7px;border-radius:99px;background:#4e5471aa;overflow:hidden}.fill{height:100%;width:0;background:linear-gradient(90deg,#48d9f8,#a26aff,#ff79d5);border-radius:99px;box-shadow:0 0 15px #a26aff;transition:width .12s}
+    .camera-box{width:146px;height:98px;border:1px solid #71799a77;border-radius:12px;background:#11152ddc;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0}.camera-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:none}.camera-box.on video{display:block}.camera-box canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}.camera-box.on .camera-placeholder{display:none}.camera-placeholder{text-align:center;color:#929cbe;font-size:10px}.camera-placeholder svg{display:block;width:22px;height:22px;margin:0 auto 6px}.camera-tag{position:absolute;bottom:5px;left:6px;background:#080d21d9;border-radius:4px;padding:3px 5px;font-size:8px;font-weight:800;color:#b9c2de}
+    .dashboard{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:15px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:16px 18px;min-height:85px;display:flex;align-items:center;gap:14px}.stat-icon{width:39px;height:39px;border-radius:11px;display:grid;place-items:center;background:#242c4a;color:#7ff1ff;flex-shrink:0}.stat-icon.purple{background:#32254e;color:#bf91ff}.stat-icon.pink{background:#422445;color:#ff9cde}.stat-icon svg{width:20px;height:20px}.stat small{display:block;color:#939fbe;font-size:10px;font-weight:800;letter-spacing:.06em;margin-bottom:6px}.stat strong{font-size:13px;font-weight:800}
+    .controls{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:10px;margin:23px 0 14px}.btn{border:1px solid #4a5279;background:#1a203e;color:#f3f5ff;min-height:43px;padding:0 17px;border-radius:10px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:9px;transition:transform .2s,background .2s}.btn:hover{transform:translateY(-2px);background:#282f56}.btn svg{width:16px;height:16px}.btn.primary{border:0;background:linear-gradient(110deg,#72ebf7,#a27bfa);color:#0b1025;box-shadow:0 7px 25px #8b8bf44d}.btn:disabled{opacity:.48;cursor:not-allowed;transform:none}.btn.ghost{background:transparent}
+    .hint,.deploy{text-align:center;color:#9ca8c9;font-size:12px;line-height:1.7}.hint kbd{font:700 10px "Orbitron",sans-serif;color:#d8ddf4;border:1px solid #5b6485;border-radius:4px;padding:3px 5px}.status-message{text-align:center;min-height:20px;color:#86e7f5;font-size:12px;line-height:1.6;margin:12px 0}.mode{display:table;margin:8px auto;padding:7px 13px;border:1px solid #706693;border-radius:20px;color:#efc7ff;background:#3b28545c;font-size:11px;font-weight:800}
+    .source-panel{margin:27px 0 0;border:1px solid #343a59;border-radius:16px;background:#11152a;padding:18px}.source-panel summary{cursor:pointer;font-weight:800;color:#dbd7ff}.source-panel p{color:#aab4d0;font-size:12px;line-height:1.7}.source-actions{display:flex;flex-wrap:wrap;gap:9px;margin:13px 0}.source-panel textarea{display:block;width:100%;height:300px;resize:vertical;background:#080b1c;color:#c7f6ff;border:1px solid #485273;border-radius:10px;padding:14px;font:12px/1.5 monospace}.footer{text-align:center;border-top:1px solid #333955;margin-top:25px;padding-top:17px;color:#687495;font-size:10px;letter-spacing:.08em}
+    @media(max-width:700px){.app{padding:20px 15px}.hero{margin:33px auto 24px}.game-frame{min-height:450px}.frame-top{left:17px;right:17px;top:18px}.frame-bottom{left:17px;right:17px;bottom:19px}.pill{padding:8px 10px;font-size:10px}.stage-indicator span{display:none}.dashboard{grid-template-columns:1fr;gap:8px}.stat{min-height:62px;padding:11px 14px}.orb-label{bottom:112px}.hero p{font-size:12px}.camera-box{width:110px;height:76px}.charge{width:55%}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+  </style>
+ </head>
+ <body>
+  <main class="app canva-container">
+   <header class="top canva-header">
+    <div class="brand">
+     <div class="brand-mark" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sparkles" aria-hidden="true" class="lucide lucide-sparkles"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg>
+     </div>
+     <div class="brand-name">NEON SPIRIT</div>
+    </div>
+    <div class="top-right">
+     <span>●</span> GESTURE POWER GAME
+    </div>
+   </header>
+   <section class="hero canva-section" aria-labelledby="title">
+    <p class="eyebrow">YOUR HANDS. YOUR POWER.</p>
+    <h1 id="title">네온 <em>원기단</em></h1>
+    <p>손을 펴서 모으고, 주먹을 쥐어 충전하고, 다시 펼쳐 발사하세요.</p>
+   </section>
+   <section class="game-frame canva-panel" aria-label="게임 화면">
+    <canvas id="fx" aria-hidden="true" width="1134" height="478"></canvas>
+    <div class="frame-top">
+     <div id="game-pill" class="pill canva-tag">
+      <span id="live-dot" class="dot"></span><span id="game-state">시작 대기 중</span>
+     </div>
+     <div class="stage-indicator">
+      <span>STAGE</span><b id="stage-number">01 / 03</b>
+     </div>
+    </div>
+    <div class="orb-label" aria-live="polite">
+     <strong id="action-title">에너지를 깨워보세요</strong><small id="action-subtitle">손을 펼쳐 원기단을 모으세요</small>
+    </div>
+    <div class="frame-bottom">
+     <div class="charge">
+      <div class="charge-head">
+       <span>ENERGY CHARGE</span><b id="charge-value">0%</b>
+      </div>
+      <div class="track canva-progress" role="progressbar" aria-label="에너지 충전량" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="charge-track">
+       <div class="fill" id="charge-fill"></div>
+      </div>
+     </div>
+     <div class="camera-box canva-video" id="camera-box">
+      <video id="camera" autoplay="" muted="" playsinline="" aria-label="손 인식 카메라 미리보기"></video> <canvas id="hand-overlay" width="640" height="480" aria-hidden="true"></canvas>
+      <div class="camera-placeholder">
+       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="camera-off" aria-hidden="true" class="lucide lucide-camera-off"><path d="M14.564 14.558a3 3 0 1 1-4.122-4.121"></path><path d="m2 2 20 20"></path><path d="M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175"></path><path d="M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344"></path></svg>카메라 대기
+      </div>
+      <div class="camera-tag" id="camera-tag">대기</div>
+     </div>
+    </div>
+   </section>
+   <section class="dashboard canva-section" aria-label="게임 정보">
+    <div class="stat canva-card">
+     <div class="stat-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hand" aria-hidden="true" class="lucide lucide-hand"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"></path><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"></path><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg>
+     </div>
+     <div>
+      <small>현재 손 모양 · <span id="recognition-status">카메라 대기</span></small><strong id="hand-shape" aria-live="polite">인식 대기</strong>
+     </div>
+    </div>
+    <div class="stat canva-card">
+     <div class="stat-icon purple">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="zap" aria-hidden="true" class="lucide lucide-zap"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"></path></svg>
+     </div>
+     <div>
+      <small>게임 단계</small><strong id="phase-text">준비</strong>
+     </div>
+    </div>
+    <div class="stat canva-card">
+     <div class="stat-icon pink">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sparkles" aria-hidden="true" class="lucide lucide-sparkles"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg>
+     </div>
+     <div>
+      <small>발사 횟수</small><strong id="shot-count">0회</strong>
+     </div>
+    </div>
+   </section>
+   <nav class="controls canva-menu" aria-label="게임 조작">
+    <button id="start-btn" class="btn primary canva-button" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="play" aria-hidden="true" class="lucide lucide-play"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path></svg> 게임 시작</button> <button id="camera-btn" class="btn canva-button" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="camera" aria-hidden="true" class="lucide lucide-camera"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg> 카메라 시작</button> <button id="open-btn" class="btn canva-button" type="button" disabled=""><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="hand" aria-hidden="true" class="lucide lucide-hand"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"></path><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"></path><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg> 손 펴기</button> <button id="fist-btn" class="btn canva-button" type="button" disabled=""><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="grab" aria-hidden="true" class="lucide lucide-grab"><path d="M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4"></path><path d="M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"></path><path d="M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5"></path><path d="M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2"></path><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0"></path></svg> 주먹 쥐기</button> <button id="restart-btn" class="btn ghost canva-button" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="rotate-ccw" aria-hidden="true" class="lucide lucide-rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg> 다시 시작</button>
+   </nav>
+   <p id="control-mode" class="mode canva-tag" role="status">대체 조작 활성화 · 화면 버튼 / O·F 키</p>
+   <p class="hint canva-text">화면 버튼 또는 키보드 <kbd>O</kbd> 손 펴기 / <kbd>F</kbd> 주먹 쥐기 · 카메라 연결 중에도 대체 조작을 사용할 수 있습니다.</p>
+   <p id="status-message" class="status-message canva-text" role="status" aria-live="polite">카메라 대기 중입니다. 게임 시작 후 카메라를 연결하거나 대체 조작을 사용하세요.</p>
+   <section class="source-panel canva-panel" aria-label="독립 HTML 실행 및 소스">
+    <details id="source-details">
+     <summary class="canva-button">독립 HTML 실행 안내 · 전체 소스 보기</summary>
+     <p class="deploy canva-text">이 페이지의 전체 소스를 복사하거나 HTML 파일로 저장한 뒤 HTTPS 웹서버 또는 localhost에서 여세요. CDN 연결이 필요합니다. iframe 안에서는 카메라 접근이 제한될 수 있으며 호스트 페이지의 iframe에 <code>allow="camera"</code>가 필요할 수 있습니다. 이 미리보기에서 다운로드가 차단되면 소스 복사를 이용하세요.</p>
+     <div class="source-actions">
+      <button id="copy-btn" class="btn canva-button" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="copy" aria-hidden="true" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg> 전체 소스 복사</button> <button id="download-btn" class="btn canva-button" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="download" aria-hidden="true" class="lucide lucide-download"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg> HTML 다운로드</button>
+     </div>
+     <p id="source-message" role="status" aria-live="polite"></p>
+     <label for="source-code">전체 HTML 소스</label> <textarea id="source-code" class="canva-input" readonly="" spellcheck="false"></textarea>
+    </details>
+   </section>
+   <footer class="footer canva-footer">OPEN HAND → CLOSED FIST → OPEN HAND &nbsp; · &nbsp; RELEASE YOUR ENERGY</footer>
+  </main>
+  <script>
+(() => {
+  'use strict';
+  if (window.lucide) lucide.createIcons();
+  const $ = id => document.getElementById(id);
+  const canvas = $('fx'), ctx = canvas.getContext('2d');
+  const video = $('camera'), overlay = $('hand-overlay'), octx = overlay.getContext('2d');
+  const cameraBtn = $('camera-btn');
+  const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';
+  const connections = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let w=0,h=0,dpr=1,particles=[],rings=[],phase='idle',charge=0,shots=0,playing=false;
+  let stream=null,hands=null,detecting=false,processing=false,session=0,stableShape='none',candidate='none',streak=0;
+  let lastTime=performance.now(),burstFlash=0,lastFire=0,manualUntil=0,manualShape='none',sourceSnapshot='';
+
+  function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);w=r.width;h=r.height;canvas.width=w*dpr;canvas.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+  addEventListener('resize',resize);resize();
+  function message(s){$('status-message').textContent=s}
+  function setCameraState(label,tag){$('recognition-status').textContent=label;$('camera-tag').textContent=tag}
+  function setCharge(v){charge=Math.max(0,Math.min(100,v));$('charge-value').textContent=Math.floor(charge)+'%';$('charge-fill').style.width=charge+'%';$('charge-track').setAttribute('aria-valuenow',Math.floor(charge))}
+  function update(){
+    const data={
+      idle:['시작 대기 중','에너지를 깨워보세요','손을 펼쳐 원기단을 모으세요','준비','01 / 03'],
+      gather:['에너지 모으는 중','손을 펼쳐 에너지를 모으세요','이제 주먹을 쥐어 힘을 충전하세요','에너지 모으기','01 / 03'],
+      charging:['에너지 충전 중','에너지를 충전 중!','주먹을 유지하면 충전됩니다','주먹 충전','02 / 03'],
+      ready:['발사 준비 완료','다시 손을 펼치세요!','모은 에너지를 한 번에 발사하세요','발사 대기','03 / 03'],
+      fired:['에너지 발사!','원기단 발사!','네온 에너지가 사방으로 퍼집니다','발사 완료','03 / 03']
+    }[phase];
+    $('game-state').textContent=data[0];$('action-title').textContent=data[1];$('action-subtitle').textContent=data[2];
+    $('phase-text').textContent=data[3];$('stage-number').textContent=data[4];$('shot-count').textContent=shots+'회';
+    $('live-dot').classList.toggle('active',playing);
+    $('open-btn').disabled=!playing;$('fist-btn').disabled=!playing;
+  }
+  function start(){playing=true;phase='idle';shots=0;lastFire=0;manualUntil=0;setCharge(0);particles=[];rings=[];stableShape='none';candidate='none';streak=0;$('hand-shape').textContent='동작을 기다리는 중';update();message('손을 펴서 시작하세요. 카메라 또는 대체 조작을 사용할 수 있습니다.')}
+  function spark(count,speed,colors){const cx=w/2,cy=h*.47;for(let i=0;i<count;i++){const angle=Math.random()*Math.PI*2,vel=speed*(.35+Math.random()*.9);particles.push({x:cx,y:cy,vx:Math.cos(angle)*vel,vy:Math.sin(angle)*vel,life:1,decay:.008+Math.random()*.015,size:1+Math.random()*3.5,color:colors[Math.floor(Math.random()*colors.length)]})}}
+  function fire(){phase='fired';shots++;lastFire=performance.now();burstFlash=1;rings.push({radius:28,alpha:1,speed:12},{radius:35,alpha:.8,speed:8});spark(reduced?45:190,8,['#6efaff','#a87aff','#ff77dd','#ffffff']);update();message('발사 성공! 주먹을 거쳐 다시 손을 펴면 다음 에너지를 모을 수 있어요.')}
+  function gesture(g){
+    if(!playing)return;
+    $('hand-shape').textContent=g==='open'?'✋ 손 펼침':'✊ 주먹 쥠';
+    if(g==='open'){
+      if((phase==='idle'||phase==='fired')&&performance.now()-lastFire>800){phase='gather';setCharge(0);spark(20,2,['#70f8ff','#b78aff']);message('에너지를 모았습니다. 주먹을 쥐고 유지하세요.')}
+      else if((phase==='charging'||phase==='ready')&&charge>=20&&performance.now()-lastFire>800)fire();
+    }else if(g==='fist'&&phase==='gather'){phase='charging';message('충전 중! 주먹을 유지하다가 손을 다시 펼쳐 발사하세요.')}
+    update();
+  }
+  $('start-btn').addEventListener('click',start);
+  $('restart-btn').addEventListener('click',()=>{start();message('새 게임이 준비되었습니다. 손을 펴보세요!')});
+  function manual(g){if(!playing)return;manualShape=g;manualUntil=performance.now()+5000;$('control-mode').textContent='대체 조작 활성화 · '+(g==='open'?'손 펴기':'주먹 쥐기')+' 입력';gesture(g)}
+  $('open-btn').addEventListener('click',()=>manual('open'));
+  $('fist-btn').addEventListener('click',()=>manual('fist'));
+  document.addEventListener('keydown',e=>{if(e.repeat||!playing||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;const k=e.key.toLowerCase();if(k==='o'||k==='f')manual(k==='o'?'open':'fist')});
+
+  function classify(lm){
+    if(!lm)return 'none';
+    const dist=(a,b)=>Math.hypot(lm[a].x-lm[b].x,lm[a].y-lm[b].y);
+    let extended=0,curled=0;
+    for(const [tip,pip,mcp] of [[8,6,5],[12,10,9],[16,14,13],[20,18,17]]){
+      const ratio=dist(tip,0)/Math.max(.001,dist(mcp,0));
+      if(ratio>1.55&&dist(tip,mcp)>dist(pip,mcp)*1.35)extended++;
+      if(ratio<1.32||dist(tip,mcp)<dist(pip,mcp)*1.15)curled++;
+    }
+    return extended>=4?'open':curled>=4?'fist':'other';
+  }
+  function drawHand(lm){
+    octx.clearRect(0,0,overlay.width,overlay.height);if(!lm)return;
+    octx.strokeStyle='#69f6ff';octx.lineWidth=3;octx.shadowColor='#69f6ff';octx.shadowBlur=8;
+    for(const [a,b] of connections){octx.beginPath();octx.moveTo(lm[a].x*overlay.width,lm[a].y*overlay.height);octx.lineTo(lm[b].x*overlay.width,lm[b].y*overlay.height);octx.stroke()}
+    octx.fillStyle='#ff9cde';for(const p of lm){octx.beginPath();octx.arc(p.x*overlay.width,p.y*overlay.height,4,0,Math.PI*2);octx.fill()}octx.shadowBlur=0;
+  }
+  function onResults(results){
+    if(!detecting||!stream)return;
+    const found=results.multiHandLandmarks&&results.multiHandLandmarks[0];
+    drawHand(found);const next=classify(found);
+    if(next===candidate)streak++;else{candidate=next;streak=1}
+    setCameraState(found?'손 감지 · '+Math.min(100,Math.round(streak/5*100))+'% 안정화':'손 탐색 중',found?'손 감지':'연결됨');
+    if(streak>=5&&next!==stableShape){
+      stableShape=next;
+      if(next==='open'||next==='fist'){
+        if(performance.now()>=manualUntil)gesture(next);
+      }else $('hand-shape').textContent=next==='other'?'손 모양 확인 중':'손이 보이지 않음';
+    }
+  }
+  async function detect(token){
+    if(!detecting||!stream||token!==session)return;
+    if(hands&&video.readyState>=2&&!processing){
+      processing=true;
+      try{await hands.send({image:video})}
+      catch(err){stopCamera('인식 연결 실패','오류');message('손 인식 모델 실행에 실패했습니다. 네트워크 연결을 확인하고 카메라 시작을 다시 누르세요. 대체 조작은 계속 사용할 수 있습니다.');return}
+      finally{processing=false}
+    }
+    if(detecting&&token===session)requestAnimationFrame(()=>detect(token));
+  }
+  function stopCamera(label='카메라 대기',tag='대기'){
+    detecting=false;session++;
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+    video.pause();video.srcObject=null;$('camera-box').classList.remove('on');drawHand(null);
+    stableShape='none';candidate='none';streak=0;setCameraState(label,tag);
+    cameraBtn.textContent='카메라 시작';$('control-mode').textContent='대체 조작 활성화 · 화면 버튼 / O·F 키';
+    if(playing)$('hand-shape').textContent='인식 대기';
+  }
+  function cameraFailure(err){
+    const name=err&&err.name;
+    let state='연결 실패',reason='카메라를 연결하지 못했습니다. 장치와 브라우저 설정을 확인하고 다시 시도하세요.';
+    if(!isSecureContext){state='HTTPS 필요';reason='카메라는 HTTPS 또는 localhost에서 실행해야 합니다.'}
+    else if(name==='NotFoundError'||name==='DevicesNotFoundError'){state='카메라 없음';reason='연결된 카메라가 없습니다. 카메라를 연결하고 다시 시도하세요.'}
+    else if(name==='NotReadableError'||name==='TrackStartError'){state='다른 앱 사용 중';reason='다른 앱이 카메라를 사용 중일 수 있습니다. 영상 앱을 닫고 다시 시도하세요.'}
+    else if(name==='NotAllowedError'||name==='PermissionDeniedError'||name==='SecurityError'){state='권한 거부';reason='카메라 권한이 거부되거나 게시 환경에서 차단되었습니다. 사이트 설정을 확인하세요.'}
+    else if(name==='LibraryError'){state='라이브러리 오류';reason='MediaPipe Hands 또는 카메라 처리 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하고 페이지를 새로고침한 뒤 카메라 시작을 다시 누르세요.'}
+    else if(err&&err.message)reason+=' '+err.message;
+    stopCamera(state,state);message(reason+(window.self!==window.top?' iframe이라면 호스트에 allow="camera"가 필요할 수 있습니다. 가능하면 HTTPS 주소를 새 탭에서 직접 여세요.':'')+' 대체 조작을 사용할 수 있습니다.');
+  }
+  async function connectCamera(){
+    if(cameraBtn.disabled||stream)return;
+    cameraBtn.disabled=true;setCameraState('카메라 대기','연결 중');message('카메라 사용 권한을 요청하는 중입니다…');
+    try{
+      if(!isSecureContext)throw new DOMException('HTTPS 필요','SecurityError');
+      if(!navigator.mediaDevices?.getUserMedia)throw new DOMException('이 환경에서는 카메라 API를 사용할 수 없습니다.','SecurityError');
+      if(typeof window.Hands!=='function'||typeof window.Camera!=='function'){const e=new Error('CDN 로드 실패');e.name='LibraryError';throw e}
+      stream=await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      const activeStream=stream;
+      activeStream.getVideoTracks()[0].addEventListener('ended',()=>{if(stream===activeStream){stopCamera('연결 끊김','끊김');message('카메라 연결이 끊어졌습니다. 카메라 시작을 다시 누르거나 대체 조작을 사용하세요.')}});
+      video.srcObject=stream;await video.play();
+      if(!hands){hands=new Hands({locateFile:file=>CDN+file});hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.65,minTrackingConfidence:.6});hands.onResults(onResults)}
+      $('camera-box').classList.add('on');cameraBtn.textContent='카메라 끄기';
+      setCameraState('연결됨 · 손 탐색 중','연결됨');stableShape='none';candidate='none';streak=0;
+      detecting=true;const token=++session;detect(token);
+      message('카메라가 연결되었습니다. 미리보기에서 손을 보여주세요. 실제 손이 감지되면 상태가 표시됩니다.');
+    }catch(err){cameraFailure(err)}
+    finally{cameraBtn.disabled=false}
+  }
+  cameraBtn.addEventListener('click',()=>{if(stream){stopCamera();message('카메라를 종료했습니다. 화면 버튼이나 O / F 키로 계속 플레이하세요.')}else connectCamera()});
+
+  function draw(now){
+    const dt=Math.min((now-lastTime)/16.67,3);lastTime=now;
+    const holdingFist=(stream&&detecting&&stableShape==='fist'&&now>=manualUntil)||(now<manualUntil&&manualShape==='fist');
+    if(phase==='charging'&&holdingFist){setCharge(charge+dt*.34);if(charge>=100){phase='ready';update();message('충전 완료! 손을 펴서 발사하세요.')}}
+    ctx.clearRect(0,0,w,h);const cx=w/2,cy=h*.47,t=now*.001;
+    if(burstFlash>0){ctx.fillStyle='rgba(128,107,255,'+(burstFlash*.14)+')';ctx.fillRect(0,0,w,h);burstFlash=Math.max(0,burstFlash-.035*dt)}
+    for(let i=0;i<35;i++){const x=(i*79.31)%w,y=(i*131.73)%h;ctx.fillStyle='rgba(174,190,255,'+(.1+.13*Math.sin(t+i))+')';ctx.fillRect(x,y,1.5,1.5)}
+    const active=playing&&phase!=='fired',base=active?55+charge*.34:42,pulse=1+Math.sin(t*2.4)*.045;
+    const glow=ctx.createRadialGradient(cx,cy,4,cx,cy,base*3.5);glow.addColorStop(0,active?'rgba(143,229,255,.21)':'rgba(123,112,255,.12)');glow.addColorStop(.45,active?'rgba(121,85,255,.11)':'rgba(110,91,231,.07)');glow.addColorStop(1,'rgba(70,40,130,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(cx,cy,base*3.5,0,Math.PI*2);ctx.fill();
+    for(let j=0;j<3;j++){ctx.beginPath();ctx.arc(cx,cy,base*(1.5+j*.35)+Math.sin(t*1.5+j)*4,0,Math.PI*2);ctx.strokeStyle='rgba(140,139,255,'+(active?.13:.07)+')';ctx.lineWidth=1;ctx.stroke()}
+    if(phase!=='fired'){const orb=ctx.createRadialGradient(cx-base*.35,cy-base*.38,2,cx,cy,base*pulse);orb.addColorStop(0,active?'#f5ffff':'#bcc2ff');orb.addColorStop(.18,active?'#a9faff':'#8b8fe6');orb.addColorStop(.52,active?'#6f90f1':'#6263be');orb.addColorStop(.85,active?'#8053d1':'#44378a');orb.addColorStop(1,'rgba(85,50,180,0)');ctx.shadowBlur=active?42+charge*.35:26;ctx.shadowColor=active?'#8e7aff':'#6964cb';ctx.fillStyle=orb;ctx.beginPath();ctx.arc(cx,cy,base*pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;for(let i=0;i<4;i++){const a=t*(i%2?-.6:.7)+i*1.57;ctx.beginPath();ctx.ellipse(cx,cy,base*(1.35+i*.08),base*.35,a,0,Math.PI*2);ctx.strokeStyle=i%2?'rgba(149,105,255,.42)':'rgba(116,244,255,.38)';ctx.lineWidth=1.5;ctx.stroke()}}
+    if(active&&Math.random()<(phase==='charging'?.7:.25))spark(1,1.5,['#72f9ff','#b685ff']);
+    particles=particles.filter(p=>p.life>0);for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.993;p.vy*=.993;p.life-=p.decay*dt;ctx.globalAlpha=Math.max(0,p.life);ctx.shadowBlur=14;ctx.shadowColor=p.color;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*Math.max(.2,p.life),0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;ctx.shadowBlur=0;
+    rings=rings.filter(r=>r.alpha>0);for(const r of rings){r.radius+=r.speed*dt;r.alpha-=.023*dt;ctx.beginPath();ctx.arc(cx,cy,r.radius,0,Math.PI*2);ctx.strokeStyle='rgba(126,242,255,'+Math.max(0,r.alpha)+')';ctx.lineWidth=3;ctx.stroke()}
+    requestAnimationFrame(draw);
+  }
+  update();requestAnimationFrame(draw);
+
+  // Capture the pristine document before the source textarea is populated.
+  sourceSnapshot='<!doctype html>\n'+document.documentElement.outerHTML;
+  $('source-details').addEventListener('toggle',()=>{if($('source-details').open&&!$('source-code').value)$('source-code').value=sourceSnapshot});
+  $('copy-btn').addEventListener('click',()=>{
+    const field=$('source-code');field.value=sourceSnapshot;field.focus();field.select();
+    const copied=document.execCommand('copy');
+    $('source-message').textContent=copied?'전체 HTML 소스를 복사했습니다.':'자동 복사가 차단되었습니다. 선택된 소스를 직접 복사해 주세요.';
+  });
+  $('download-btn').addEventListener('click',()=>{
+    const blob=new Blob([sourceSnapshot],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='neon-spirit.html';document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    $('source-message').textContent='HTML 저장을 요청했습니다. 미리보기에서 다운로드가 차단된다면 전체 소스 복사를 이용해 .html 파일로 저장하세요.';
+  });
+})();
+</script></body></html>
