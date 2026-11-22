@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리 반 웹페이지 갤러리</title>
+<style>
+  :root { --bg:#0b1024; --card:#141a36; --line:#2d3563; --text:#eef1ff; --muted:#9aa4cc; --cyan:#5ee7ff; --purple:#a97bff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif; color:var(--text);
+         background:radial-gradient(ellipse at 50% 0%, #1d2557 0%, var(--bg) 60%); min-height:100vh; }
+  header { max-width:1240px; margin:auto; padding:28px 20px 10px; display:flex; flex-wrap:wrap; gap:14px; align-items:end; }
+  h1 { margin:0; font-size:clamp(26px,4vw,40px); letter-spacing:-.02em; }
+  h1 span { background:linear-gradient(90deg,var(--cyan),var(--purple)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub { color:var(--muted); font-size:14px; margin:6px 0 0; }
+  .tools { margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=search] { background:#0f1430; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:15px; width:200px; }
+  .btn { display:inline-block; padding:10px 16px; border-radius:10px; font-weight:700; font-size:14px; text-decoration:none; color:#0b1024;
+         background:linear-gradient(100deg,var(--cyan),var(--purple)); border:0; cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+  .status { max-width:1240px; margin:0 auto; padding:0 20px; color:var(--muted); font-size:13px; min-height:20px; }
+  main { max-width:1240px; margin:auto; padding:14px 20px 40px; display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;
+          transition:transform .15s, border-color .15s; }
+  .card:hover { transform:translateY(-3px); border-color:var(--cyan); }
+  .thumb { position:relative; aspect-ratio:16/10; background:#070a1a; overflow:hidden; }
+  .thumb iframe { position:absolute; top:0; left:0; width:400%; height:400%; border:0; transform:scale(.25); transform-origin:0 0; pointer-events:none; background:#fff; }
+  .thumb .ph { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:13px; }
+  .meta { padding:12px 14px; display:flex; align-items:center; gap:10px; }
+  .who { font-weight:800; font-size:17px; }
+  .page { color:var(--muted); font-size:13px; }
+  .meta .btn { margin-left:auto; padding:7px 12px; font-size:13px; }
+  .empty { grid-column:1/-1; text-align:center; color:var(--muted); padding:60px 0; }
+  footer { text-align:center; color:#5d6790; font-size:12px; padding:0 0 30px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>우리 반 <span>웹페이지 갤러리</span></h1>
+    <p class="sub">친구들이 만든 웹페이지를 눌러서 직접 체험해 보세요.</p>
+  </div>
+  <div class="tools">
+    <input id="q" type="search" placeholder="번호로 찾기 (예: 3-12)" autocomplete="off">
+    <a id="padlet" class="btn ghost" target="_blank" rel="noopener" style="display:none">📌 과제 패들렛</a>
+  </div>
+</header>
+<div id="status" class="status">작품 목록을 불러오는 중…</div>
+<main id="grid"></main>
+<footer>새 작품은 자동으로 나타나요 (1분마다 새로고침)</footer>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwE6VB49iS8LziZx9yQPkXSnVNTs-bsKOU2O61p-_LnKAqa9FVc4f14tav4mC8XzDw7sA/exec?api=list';
+const HIDE = /^test-/i; // 선생님 테스트 페이지는 숨김
+const grid = document.getElementById('grid');
+const status = document.getElementById('status');
+const q = document.getElementById('q');
+let pages = [];
+const known = new Map(); // url -> card (다시 그릴 때 미리보기 iframe 유지)
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// 3-2 가 3-12 보다 앞에 오도록 자연 정렬
+const natural = (a, b) => a.localeCompare(b, 'ko', { numeric: true });
+
+// 화면에 보일 때만 미리보기를 불러와 무거워지지 않게
+const io = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    const box = en.target, f = document.createElement('iframe');
+    f.src = box.dataset.src; f.loading = 'lazy'; f.tabIndex = -1;
+    f.setAttribute('sandbox', 'allow-scripts'); f.setAttribute('aria-hidden', 'true');
+    box.querySelector('.ph')?.remove(); box.appendChild(f);
+    io.unobserve(box);
+  });
+}, { rootMargin: '200px' });
+
+function card(p) {
+  const key = p.url + '?v=' + p.v;
+  if (known.has(key)) return known.get(key);
+  const el = document.createElement('article');
+  el.className = 'card';
+  el.innerHTML =
+    '<a class="thumb" href="' + esc(key) + '" target="_blank" rel="noopener" data-src="' + esc(key) + '"><div class="ph">미리보기 불러오는 중</div></a>' +
+    '<div class="meta"><div><div class="who">' + esc(p.student) + '</div><div class="page">' + esc(p.page) + '</div></div>' +
+    '<a class="btn" href="' + esc(key) + '" target="_blank" rel="noopener">열기</a></div>';
+  io.observe(el.querySelector('.thumb'));
+  known.set(key, el);
+  return el;
+}
+
+function render() {
+  const term = q.value.trim().toLowerCase();
+  const list = pages.filter(p => !HIDE.test(p.student))
+    .filter(p => !term || (p.student + ' ' + p.page).toLowerCase().includes(term))
+    .sort((a, b) => natural(a.student, b.student) || natural(a.page, b.page));
+  grid.replaceChildren(...list.map(card));
+  if (!list.length) grid.innerHTML = '<div class="empty">' + (term ? '찾는 작품이 없어요.' : '아직 올라온 작품이 없어요.') + '</div>';
+  const count = pages.filter(p => !HIDE.test(p.student));
+  const students = new Set(count.map(p => p.student)).size;
+  status.textContent = '작품 ' + count.length + '개 · 학생 ' + students + '명';
+}
+
+async function load() {
+  try {
+    const r = await fetch(API, { cache: 'no-store' });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || '목록 오류');
+    pages = data.pages || [];
+    if (data.padletUrl) { const a = document.getElementById('padlet'); a.href = data.padletUrl; a.style.display = ''; }
+    render();
+  } catch (e) {
+    status.textContent = '목록을 불러오지 못했어요. 잠시 후 새로고침해 주세요. (' + e.message + ')';
+  }
+}
+q.addEventListener('input', render);
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
