@@ -526,4 +526,48 @@
             if (st.seenOpenPalm) {
               st.charge = Math.min(1.0, st.charge + dt * 1.15);
               if (Math.random() < 0.55) {
-                spawnSparks(st.palmX, st.palmY, 2
+                spawnSparks(st.palmX, st.palmY, 2, "#38bdf8", 0.65);
+              }
+              setStatus(`파란 네온 구체 충전 중: ${Math.round(st.charge * 100)}%`, "#60a5fa");
+            } else {
+              setStatus("먼저 손을 완전히 펴서 인식시켜 주세요", "#93c5fd");
+            }
+          } else {
+            // MID 상태에서는 현재 충전량 유지
+            if (st.seenOpenPalm && st.charge > 0.05) {
+              setStatus(`에너지 유지 중 (${Math.round(st.charge * 100)}%) — 손을 펼쳐 발사!`, "#38bdf8");
+            }
+          }
+
+          drawHandSkeleton(lm);
+        }
+
+        // 모든 손 상태의 레이저 및 구체 렌더링
+        for (const st of handStates) {
+          if (st.beamTimer > 0) {
+            st.beamTimer = Math.max(0, st.beamTimer - dt);
+            if (Math.random() < 0.8) {
+              spawnSparks(
+                st.palmX + st.dirX * 80,
+                st.palmY + st.dirY * 80,
+                3,
+                "#bae6fd",
+                1.2
+              );
+            }
+            drawLaserBeam(st, timeSec);
+          }
+          drawEnergyOrb(st.palmX, st.palmY, st.charge, timeSec);
+        }
+
+        updateAndDrawParticles();
+        ctx.restore();
+
+        shakeIntensity = Math.max(0, shakeIntensity - dt * 38);
+      }
+
+      requestAnimationFrame(loop);
+    }
+  </script>
+</body>
+</html>
