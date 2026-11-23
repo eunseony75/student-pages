@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 출입 인식 시스템</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      --accent-me: #10b981;     /* 나: 초록색 */
+      --accent-soi: #f59e0b;    /* 소이: 주황색 */
+      --accent-bg: #94a3b8;     /* 배경: 회색 */
+    }
+
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      padding: 30px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+
+    /* 웹캠 영역 */
+    #webcam-container {
+      width: 320px;
+      height: 320px;
+      margin: 0 auto 20px;
+      border-radius: 12px;
+      overflow: hidden;
+      background-color: #0f172a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 4px solid #e2e8f0;
+      transition: border-color 0.3s ease;
+    }
+
+    #webcam-container canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* 상태 메시지 배너 */
+    .status-box {
+      padding: 16px;
+      border-radius: 12px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 24px;
+      min-height: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .status-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .status-sub {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 6px;
+    }
+
+    /* 상태별 스타일 테마 */
+    .state-me {
+      background-color: #ecfdf5;
+      border-color: var(--accent-me);
+      color: #065f46;
+    }
+    .state-soi {
+      background-color: #fffbeb;
+      border-color: var(--accent-soi);
+      color: #92400e;
+    }
+    .state-bg {
+      background-color: #f8fafc;
+      border-color: #cbd5e1;
+      color: var(--text-sub);
+    }
+
+    /* 막대그래프 영역 */
+    #label-container {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 12px;
+      background-color: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background-color: #3b82f6;
+      border-radius: 999px;
+      transition: width 0.1s linear, background-color 0.2s ease;
+    }
+
+    .notice {
+      margin-top: 20px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>AI 스마트 출입 안내</h1>
+
+    <!-- 웹캠 화면 -->
+    <div id="webcam-container">
+      <span style="color: #94a3b8; font-size: 0.9rem;">모델 및 카메라 로딩 중...</span>
+    </div>
+
+    <!-- 인식 결과 및 인사말 출력 -->
+    <div id="status-box" class="status-box state-bg">
+      <p id="status-message" class="status-title">대기 중...</p>
+      <span id="status-detail" class="status-sub">카메라 앞에 서주세요</span>
+    </div>
+
+    <!-- 확률 막대그래프 -->
+    <div id="label-container"></div>
+
+    <div class="notice">
+      * 브라우저 정책상 첫 음성 안내가 나오지 않을 경우 화면을 한 번 클릭해 주세요.
+    </div>
+  </div>
+
+  <!-- TensorFlow.js 및 Teachable Machine 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    // 1. 설정 상수
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/zeDQAV6nR/";
+    const CONFIDENCE_THRESHOLD = 0.85; // 최소 확신도 (85% 이상일 때 유효 프레임으로 인정)
+    const REQUIRED_STREAK = 12;        // 상태 확정을 위해 연속으로 감지되어야 하는 프레임 수 (약 0.5~1초)
+
+    // 전역 변수
+    let model, webcam, labelContainer, maxPredictions;
+    let barElements = [];
+
+    // 상태 추적 변수 (흔들림 방지 및 중복 발화 방지용)
+    let confirmedState = null;   // 현재 확정된 상태 ('나', '소이', '배경')
+    let candidateState = null;   // 현재 연속 감지 중인 후보 상태
+    let streakCount = 0;         // 후보 상태가 연속으로 감지된 횟수
+
+    // 한국어 음성 출력 (Web Speech API)
+    function speakKorean(text) {
+      if (!('speechSynthesis' in window)) {
+        console.warn("이 브라우저는 음성 합성을 지원하지 않습니다.");
+        return;
+      }
+      // 이전 음성이 재생 중이라면 취소하고 새 음성 재생
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 1.0;  // 말하기 속도
+      utterance.pitch = 1.0; // 목소리 톤
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // UI 및 음성 업데이트 (상태가 변경될 때만 호출됨)
+    function onStateChanged(newState) {
+      const statusBox = document.getElementById("status-box");
+      const statusMessage = document.getElementById("status-message");
+      const statusDetail = document.getElementById("status-detail");
+      const webcamContainer = document.getElementById("webcam-container");
+
+      // 기존 테마 클래스 초기화
+      statusBox.classList.remove("state-me", "state-soi", "state-bg");
+
+      if (newState === "나") {
+        const greeting = "환영합니다! 어서 오세요.";
+        statusBox.classList.add("state-me");
+        webcamContainer.style.borderColor = "var(--accent-me)";
+        statusMessage.textContent = greeting;
+        statusDetail.textContent = "인식된 대상: [나]";
+        speakKorean(greeting);
+
+      } else if (newState === "소이") {
+        const warning = "누구세요? 용건을 말해주세요";
+        statusBox.classList.add("state-soi");
+        webcamContainer.style.borderColor = "var(--accent-soi)";
+        statusMessage.textContent = warning;
+        statusDetail.textContent = "인식된 대상: [소이]";
+        speakKorean(warning);
+
+      } else {
+        // [배경] 또는 기타 상태: 사람이 없는 상태로 처리, 인사말 없음
+        statusBox.classList.add("state-bg");
+        webcamContainer.style.borderColor = "#e2e8f0";
+        statusMessage.textContent = "사람이 감지되지 않았습니다";
+        statusDetail.textContent = "현재 상태: [배경]";
+      }
+    }
+
+    // 초기화 및 자동 실행 함수
+    async function init() {
+      try {
+        const modelURL = MODEL_URL + "model.json";
+        const metadataURL = MODEL_URL + "metadata.json";
+
+        // 모델 로드
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // 웹캠 설정 (좌우 반전 flip = true)
+        const flip = true;
+        webcam = new tmImage.Webcam(320, 320, flip);
+        await webcam.setup(); // 웹캠 접근 권한 요청
+        await webcam.play();
+
+        // 웹캠 캔버스 DOM에 추가
+        const webcamContainer = document.getElementById("webcam-container");
+        webcamContainer.innerHTML = "";
+        webcamContainer.appendChild(webcam.canvas);
+
+        // 막대그래프 UI 동적 생성
+        labelContainer = document.getElementById("label-container");
+        for (let i = 0; i < maxPredictions; i++) {
+          const row = document.createElement("div");
+          row.className = "bar-row";
+
+          const header = document.createElement("div");
+          header.className = "bar-header";
+
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = "로딩 중...";
+
+          const percentSpan = document.createElement("span");
+          percentSpan.textContent = "0%";
+
+          header.appendChild(nameSpan);
+          header.appendChild(percentSpan);
+
+          const track = document.createElement("div");
+          track.className = "bar-track";
+
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          track.appendChild(fill);
+
+          row.appendChild(header);
+          row.appendChild(track);
+          labelContainer.appendChild(row);
+
+          barElements.push({ nameSpan, percentSpan, fill });
+        }
+
+        // 예측 루프 시작
+        window.requestAnimationFrame(loop);
+
+      } catch (error) {
+        console.error("초기화 오류:", error);
+        document.getElementById("webcam-container").innerHTML =
+          `<span style="color:#ef4444; padding:10px;">웹캠을 시작할 수 없습니다.<br>카메라 권한 및 HTTPS 환경을 확인하세요.</span>`;
+      }
+    }
+
+    // 매 프레임 실행 루프
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    // 예측 및 상태 판별 로직
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+
+      let highestProb = 0;
+      let bestClassName = "";
+
+      // 1. 막대그래프 업데이트 및 최고 확률 클래스 찾기
+      for (let i = 0; i < maxPredictions; i++) {
+        const className = prediction[i].className;
+        const probability = prediction[i].probability;
+        const percentage = (probability * 100).toFixed(1) + "%";
+
+        barElements[i].nameSpan.textContent = className;
+        barElements[i].percentSpan.textContent = percentage;
+        barElements[i].fill.style.width = percentage;
+
+        // 레이블별 막대 색상 지정
+        if (className === "나") {
+          barElements[i].fill.style.backgroundColor = "var(--accent-me)";
+        } else if (className === "소이") {
+          barElements[i].fill.style.backgroundColor = "var(--accent-soi)";
+        } else {
+          barElements[i].fill.style.backgroundColor = "var(--accent-bg)";
+        }
+
+        if (probability > highestProb) {
+          highestProb = probability;
+          bestClassName = className;
+        }
+      }
+
+      // 2. 프레임 흔들림 방지 (연속 프레임 검증)
+      if (highestProb >= CONFIDENCE_THRESHOLD) {
+        if (bestClassName === candidateState) {
+          streakCount++;
+        } else {
+          candidateState = bestClassName;
+          streakCount = 1;
+        }
+
+        // 일정 프레임(REQUIRED_STREAK) 이상 연속 감지되었을 때만 상태 확정
+        if (streakCount >= REQUIRED_STREAK) {
+          // 3. 이전 상태와 다를 때만 상태 변경 및 1회 음성 출력
+          if (confirmedState !== candidateState) {
+            confirmedState = candidateState;
+            onStateChanged(confirmedState);
+          }
+        }
+      } else {
+        // 확신도가 기준치 미만이면 연속 카운트 초기화
+        candidateState = null;
+        streakCount = 0;
+      }
+    }
+
+    // 페이지 로드 즉시 실행
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
