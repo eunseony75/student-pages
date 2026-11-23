@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 얼굴 인식 인사말</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent-me: #22c55e;
+      --accent-friend: #38bdf8;
+      --accent-bg: #64748b;
+      --warn: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at top, #1e293b, var(--bg) 65%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 920px;
+      background: rgba(30, 41, 59, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .dot.ready {
+      background: var(--accent-me);
+    }
+
+    .dot.error {
+      background: #ef4444;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .webcam-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .webcam-frame {
+      position: relative;
+      width: 100%;
+      max-width: 380px;
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #090d16;
+      border: 2px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .webcam-frame canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      display: block;
+    }
+
+    .loading-text {
+      color: var(--muted);
+      font-size: 0.95rem;
+      text-align: center;
+      padding: 16px;
+    }
+
+    .meta-bar {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .greeting-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-left: 6px solid var(--accent-bg);
+      border-radius: 14px;
+      padding: 20px;
+      min-height: 124px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .greeting-card.state-me {
+      border-left-color: var(--accent-me);
+    }
+
+    .greeting-card.state-friend {
+      border-left-color: var(--accent-friend);
+    }
+
+    .greeting-card.state-bg {
+      border-left-color: var(--accent-bg);
+    }
+
+    .detected-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .greeting-message {
+      font-size: 1.3rem;
+      font-weight: 700;
+      line-height: 1.45;
+      color: var(--text);
+    }
+
+    .bars-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .bars-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+
+    .bar-name {
+      font-weight: 600;
+    }
+
+    .bar-value {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 12px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: var(--accent-bg);
+      transition: width 0.12s linear;
+    }
+
+    .bar-fill.me {
+      background: var(--accent-me);
+    }
+
+    .bar-fill.friend {
+      background: var(--accent-friend);
+    }
+
+    .audio-hint {
+      font-size: 0.82rem;
+      color: var(--warn);
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: none;
+    }
+
+    .audio-hint.visible {
+      display: block;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    button.btn-sound {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+
+    button.btn-sound:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>실시간 얼굴 인식 인사말</h1>
+      <div class="status-badge" id="statusBadge">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">모델 및 웹캠 초기화 중...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="webcam-box">
+        <div class="webcam-frame" id="webcamContainer">
+          <div class="loading-text" id="loadingText">카메라 권한을 허용해 주세요.<br />자동으로 시작됩니다.</div>
+        </div>
+        <div class="meta-bar">
+          <span id="streakInfo">연속 감지: 0 / 6 프레임</span>
+          <span>임계값: 75%</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="greeting-card state-bg" id="greetingCard">
+          <div class="detected-label" id="detectedLabel">현재 상태: 대기 중</div>
+          <div class="greeting-message" id="greetingMessage">사람이 감지되지 않았습니다.</div>
+        </div>
+
+        <div class="audio-hint" id="audioHint">
+          브라우저 정책으로 자동 음성이 제한될 수 있습니다. 화면을 한 번 클릭하면 한국어 음성이 정상 재생됩니다.
+        </div>
+
+        <div class="bars-card">
+          <div class="bars-title">레이블별 인식 확률</div>
+          <div id="barsContainer"></div>
+        </div>
+
+        <div class="controls">
+          <span id="lastSpokenInfo">마지막 음성: 없음</span>
+          <button type="button" class="btn-sound" id="testVoiceBtn">음성 테스트</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TensorFlow.js & Teachable Machine Image 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/Z0EXYwSXx/";
+
+    // 프레임 흔들림 방지 설정
+    const CONFIDENCE_THRESHOLD = 0.75; // 최소 확신도 (75%)
+    const REQUIRED_STREAK = 6;         // 연속 감지 프레임 수
+
+    // 인사말 문구 설정
+    const GREETINGS = {
+      ME: {
+        badge: "상태: [나]",
+        text: "환영합니다! 오늘도 좋은 하루 보내세요!",
+        speak: "환영합니다! 오늘도 좋은 하루 보내세요!"
+      },
+      FRIEND: {
+        badge: "상태: [친구]",
+        text: "안녕하세요? 용건을 말해주세요",
+        speak: "안녕하세요? 용건을 말해주세요"
+      },
+      BACKGROUND: {
+        badge: "상태: [배경]",
+        text: "사람이 없는 상태입니다.",
+        speak: null
+      }
+    };
+
+    let model = null;
+    let webcam = null;
+    let isRunning = false;
+
+    // 상태 추적 변수
+    let candidateKey = null;
+    let candidateStreak = 0;
+    let confirmedKey = null; // 'ME' | 'FRIEND' | 'BACKGROUND' | null
+    let voiceUnlocked = false;
+
+    // DOM 요소
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const webcamContainer = document.getElementById("webcamContainer");
+    const loadingText = document.getElementById("loadingText");
+    const streakInfo = document.getElementById("streakInfo");
+    const greetingCard = document.getElementById("greetingCard");
+    const detectedLabel = document.getElementById("detectedLabel");
+    const greetingMessage = document.getElementById("greetingMessage");
+    const barsContainer = document.getElementById("barsContainer");
+    const audioHint = document.getElementById("audioHint");
+    const lastSpokenInfo = document.getElementById("lastSpokenInfo");
+    const testVoiceBtn = document.getElementById("testVoiceBtn");
+
+    // 레이블 문자열 정규화 ([나] -> 나, 공백 제거)
+    function normalizeLabel(rawLabel) {
+      return (rawLabel || "").replace(/[\[\]\s]/g, "").trim();
+    }
+
+    function mapLabelToKey(rawLabel) {
+      const clean = normalizeLabel(rawLabel);
+      if (clean === "나" || clean.toLowerCase() === "me") return "ME";
+      if (clean === "친구" || clean.toLowerCase() === "friend") return "FRIEND";
+      if (clean === "배경" || clean.toLowerCase() === "background" || clean === "없음") return "BACKGROUND";
+      return null;
+    }
+
+    function setStatus(type, message) {
+      statusDot.className = "dot" + (type ? ` ${type}` : "");
+      statusText.textContent = message;
+    }
+
+    // 확률 막대그래프 UI 생성
+    function buildBars(classLabels) {
+      barsContainer.innerHTML = "";
+      classLabels.forEach((label, idx) => {
+        const key = mapLabelToKey(label);
+        const colorClass = key === "ME" ? "me" : key === "FRIEND" ? "friend" : "";
+
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        row.innerHTML = `
+          <div class="bar-header">
+            <span class="bar-name">${escapeHtml(label)}</span>
+            <span class="bar-value" id="bar-val-${idx}">0.0%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill ${colorClass}" id="bar-fill-${idx}"></div>
+          </div>
+        `;
+        barsContainer.appendChild(row);
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function updateBars(predictions) {
+      predictions.forEach((pred, idx) => {
+        const pct = (pred.probability * 100).toFixed(1);
+        const fillEl = document.getElementById(`bar-fill-${idx}`);
+        const valEl = document.getElementById(`bar-val-${idx}`);
+        if (fillEl && valEl) {
+          fillEl.style.width = `${Math.min(100, Math.max(0, pred.probability * 100))}%`;
+          valEl.textContent = `${pct}%`;
+        }
+      });
+    }
+
+    // 한국어 음성 출력 (Web Speech API)
+    function speakKorean(text) {
+      if (!text || !("speechSynthesis" in window)) return;
+
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "ko-KR";
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+        const koVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("ko"));
+        if (koVoice) {
+          utterance.voice = koVoice;
+        }
+
+        utterance.onstart = () => {
+          voiceUnlocked = true;
+          audioHint.classList.remove("visible");
+          lastSpokenInfo.textContent = `마지막 음성: "${text}"`;
+        };
+
+        utterance.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "audio-busy") {
+            audioHint.classList.add("visible");
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+
+        // 일부 브라우저에서 cancel 직후 speak가 큐에만 머무는 경우 대비
+        setTimeout(() => {
+          if (!voiceUnlocked && window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        }, 150);
+      } catch (err) {
+        console.warn("음성 출력 오류:", err);
+        audioHint.classList.add("visible");
+      }
+    }
+
+    // 확정 상태 적용
+    function applyConfirmedState(newKey) {
+      const config = GREETINGS[newKey];
+      if (!config) return;
+
+      greetingCard.classList.remove("state-me", "state-friend", "state-bg");
+      if (newKey === "ME") greetingCard.classList.add("state-me");
+      else if (newKey === "FRIEND") greetingCard.classList.add("state-friend");
+      else greetingCard.classList.add("state-bg");
+
+      detectedLabel.textContent = config.badge;
+      greetingMessage.textContent = config.text;
+
+      // 이전 상태와 다른 상태로 바뀔 때만 1회 말하기 ([배경]은 말하지 않음)
+      if (newKey !== confirmedKey) {
+        confirmedKey = newKey;
+        if (config.speak) {
+          speakKorean(config.speak);
+        }
+      }
+    }
+
+    // 프레임 예측 및 연속 감지 처리
+    async function loop() {
+      if (!isRunning) return;
+
+      webcam.update();
+      const predictions = await model.predict(webcam.canvas);
+      updateBars(predictions);
+
+      // 가장 확률이 높은 레이블 찾기
+      let topPred = predictions[0];
+      for (let i = 1; i < predictions.length; i++) {
+        if (predictions[i].probability > topPred.probability) {
+          topPred = predictions[i];
+        }
+      }
+
+      const mappedKey = mapLabelToKey(topPred.className);
+
+      if (mappedKey && topPred.probability >= CONFIDENCE_THRESHOLD) {
+        if (candidateKey === mappedKey) {
+          candidateStreak += 1;
+        } else {
+          candidateKey = mappedKey;
+          candidateStreak = 1;
+        }
+
+        if (candidateStreak >= REQUIRED_STREAK) {
+          applyConfirmedState(candidateKey);
+        }
+      } else {
+        // 임계값 미달 시 연속 카운트 초기화 (확정된 화면/상태는 유지하되 흔들림 방지)
+        candidateKey = null;
+        candidateStreak = 0;
+      }
+
+      streakInfo.textContent = `연속 감지: ${Math.min(candidateStreak, REQUIRED_STREAK)} / ${REQUIRED_STREAK} 프레임`;
+      window.requestAnimationFrame(loop);
+    }
+
+    // 자동 초기화
+    async function init() {
+      try {
+        const modelURL = MODEL_URL + "model.json";
+        const metadataURL = MODEL_URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        const maxPredictions = model.getTotalClasses();
+        const classLabels = model.getClassLabels ? model.getClassLabels() : Array.from({ length: maxPredictions }, (_, i) => `클래스 ${i + 1}`);
+        buildBars(classLabels);
+
+        const flip = true;
+        webcam = new tmImage.Webcam(380, 380, flip);
+        await webcam.setup();
+        await webcam.play();
+
+        loadingText.remove();
+        webcamContainer.innerHTML = "";
+        webcamContainer.appendChild(webcam.canvas);
+
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.getVoices();
+          window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+          };
+        }
+
+        isRunning = true;
+        setStatus("ready", "실시간 인식 중");
+        window.requestAnimationFrame(loop);
+      } catch (err) {
+        console.error(err);
+        setStatus("error", "초기화 실패");
+        loadingText.innerHTML = `모델 또는 웹캠을 시작할 수 없습니다.<br />카메라 권한과 네트워크 상태를 확인해 주세요.<br /><small>${escapeHtml(err.message || "")}</small>`;
+      }
+    }
+
+    // 사용자 클릭 시 음성 잠금 해제 및 테스트 지원
+    document.addEventListener("click", () => {
+      if (!voiceUnlocked && "speechSynthesis" in window) {
+        voiceUnlocked = true;
+        audioHint.classList.remove("visible");
+      }
+    }, { once: true });
+
+    testVoiceBtn.addEventListener("click", () => {
+      voiceUnlocked = true;
+      audioHint.classList.remove("visible");
+      speakKorean("한국어 음성 안내가 정상 작동합니다.");
+    });
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
