@@ -48,12 +48,13 @@
       z-index: 10;
     }
     .panel {
-      background: rgba(10, 10, 20, 0.72);
+      background: rgba(10, 10, 20, 0.78);
       border: 1px solid rgba(168, 85, 247, 0.28);
       backdrop-filter: blur(10px);
       border-radius: 14px;
       padding: 12px 16px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+      max-width: 560px;
     }
     .title {
       font-size: 15px;
@@ -66,6 +67,7 @@
       font-size: 13px;
       color: #cbd5e1;
       line-height: 1.45;
+      word-break: break-word;
     }
     .charge-wrap {
       margin-top: 8px;
@@ -101,7 +103,7 @@
       justify-content: flex-end;
     }
     button {
-      background: rgba(88, 28, 135, 0.55);
+      background: rgba(88, 28, 135, 0.65);
       color: #f5f3ff;
       border: 1px solid rgba(192, 132, 252, 0.45);
       border-radius: 10px;
@@ -112,7 +114,7 @@
       transition: transform 0.12s ease, background 0.15s ease;
     }
     button:hover {
-      background: rgba(126, 34, 206, 0.78);
+      background: rgba(126, 34, 206, 0.85);
       transform: translateY(-1px);
     }
     button:active {
@@ -160,6 +162,7 @@
       </div>
 
       <div class="controls">
+        <button id="btnRetryCam" type="button">카메라 다시 연결</button>
         <button id="btnOpenHand" type="button">1. 손 펴기(보자기)</button>
         <button id="btnCloseHand" type="button">2. 손 오므리기(충전)</button>
         <button id="btnTriggerBH" type="button">3. 펼치며 블랙홀 발동</button>
@@ -178,4 +181,31 @@
       HandLandmarker
     } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
-    const video = document.getElementById("webcam
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const statusText = document.getElementById("statusText");
+    const chargePercent = document.getElementById("chargePercent");
+    const chargeFill = document.getElementById("chargeFill");
+
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+    let width = 0;
+    let height = 0;
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let hasCamera = false;
+    let currentStream = null;
+
+    const sim = {
+      phase: "IDLE",
+      wasFullyOpen: false,
+      openness: 0.75,
