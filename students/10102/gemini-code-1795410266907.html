@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Black Hole Palm - MediaPipe Tasks-Vision</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05050a;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+    #stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0d0b1a 0%, #040408 100%);
+    }
+    video {
+      display: none;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .hud-top {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .panel {
+      background: rgba(10, 10, 20, 0.78);
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+      max-width: 560px;
+    }
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #e9d5ff;
+      margin-bottom: 4px;
+    }
+    .status-line {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .charge-wrap {
+      margin-top: 8px;
+      width: 240px;
+      max-width: 55vw;
+    }
+    .charge-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #c4b5fd;
+      margin-bottom: 4px;
+    }
+    .charge-bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .charge-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #6d28d9, #a855f7, #38bdf8);
+      transition: width 0.08s linear;
+    }
+    .controls {
+      pointer-events: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    button {
+      background: rgba(88, 28, 135, 0.65);
+      color: #f5f3ff;
+      border: 1px solid rgba(192, 132, 252, 0.45);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+    button:hover {
+      background: rgba(126, 34, 206, 0.85);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .guide-bottom {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 10, 20, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      padding: 8px 18px;
+      font-size: 12.5px;
+      color: #e2e8f0;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .guide-bottom strong {
+      color: #c084fc;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <video id="webcam" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="hud-top">
+      <div class="panel">
+        <div class="title">DARK VORTEX PALM · 손바닥 블랙홀 시뮬레이션</div>
+        <div id="statusText" class="status-line">카메라 및 MediaPipe HandLandmarker 초기화 중...</div>
+        <div class="charge-wrap">
+          <div class="charge-label">
+            <span>중력 에너지 충전</span>
+            <span id="chargePercent">0%</span>
+          </div>
+          <div class="charge-bar">
+            <div id="chargeFill" class="charge-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="btnRetryCam" type="button">카메라 다시 연결</button>
+        <button id="btnOpenHand" type="button">1. 손 펴기(보자기)</button>
+        <button id="btnCloseHand" type="button">2. 손 오므리기(충전)</button>
+        <button id="btnTriggerBH" type="button">3. 펼치며 블랙홀 발동</button>
+        <button id="btnReset" type="button">초기화</button>
+      </div>
+    </div>
+
+    <div class="guide-bottom">
+      <strong>① 손 펼침(보자기)</strong> → <strong>② 손 오므림(에너지 구 충전)</strong> → <strong>③ 다시 손 펼침(전방 블랙홀 흡인)</strong>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const statusText = document.getElementById("statusText");
+    const chargePercent = document.getElementById("chargePercent");
+    const chargeFill = document.getElementById("chargeFill");
+
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+    let width = 0;
+    let height = 0;
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let hasCamera = false;
+    let currentStream = null;
+
+    const sim = {
+      phase: "IDLE",
+      wasFullyOpen: false,
+      openness: 0.75,
