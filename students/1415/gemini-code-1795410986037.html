@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>티쳐블머신 실시간 인식 &amp; 한국어 음성 안내</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --surface: #0f172a;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+      --accent: #38bdf8;
+      --me: #22c55e;
+      --friend: #f59e0b;
+      --both: #c084fc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 900px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .status-pill {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 740px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .left-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #webcam-container {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #020617;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #webcam-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      display: block;
+    }
+
+    .greeting-card {
+      width: 100%;
+      max-width: 360px;
+      min-height: 92px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .state-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .greeting-msg {
+      font-size: 1.5rem;
+      font-weight: 800;
+      min-height: 2.1rem;
+      color: var(--muted);
+    }
+
+    .greeting-msg.me {
+      color: var(--me);
+    }
+
+    .greeting-msg.friend {
+      color: var(--friend);
+    }
+
+    .greeting-msg.both {
+      color: var(--both);
+    }
+
+    .greeting-msg.idle {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .right-col {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #e2e8f0;
+    }
+
+    .bar-item {
+      margin-bottom: 14px;
+    }
+
+    .bar-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .bar-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+    }
+
+    .bar-name {
+      font-weight: 600;
+    }
+
+    .bar-pct {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+
+    .track {
+      width: 100%;
+      height: 14px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      border-radius: 999px;
+      transition: width 120ms ease-out;
+    }
+
+    .fill.active {
+      background: linear-gradient(90deg, #16a34a, #4ade80);
+    }
+
+    .helper {
+      margin-top: 16px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>실시간 얼굴 인식 &amp; 한국어 음성 안내</h1>
+      <div id="status-pill" class="status-pill">자동 시작 준비 중...</div>
+    </div>
+
+    <div class="grid">
+      <div class="left-col">
+        <div id="webcam-container"></div>
+
+        <div class="greeting-card">
+          <div id="state-label" class="state-label">현재 상태: 대기 중</div>
+          <div id="greeting-msg" class="greeting-msg idle">인사말 대기 중</div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="panel-title">레이블별 인식 확률</div>
+        <div id="bars-container"></div>
+
+        <div class="helper">
+          • 모델 URL: <code>https://teachablemachine.withgoogle.com/models/XLD4neOoe/</code><br />
+          • 확정 조건: 확신도 <strong>75% 이상</strong>이 <strong>6프레임 연속</strong> 유지될 때 상태 변경<br />
+          • 상태가 바뀔 때만 한국어 음성(<code>ko-KR</code>)을 1회 재생합니다. (<code>[배경]</code>은 무음/인사말 없음)<br />
+          • 브라우저 정책상 첫 음성이 막히면 화면을 한 번 클릭해 주세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/XLD4neOoe/";
+
+    // 흔들림 방지를 위한 확신도 및 연속 프레임 기준
+    const CONFIDENCE_THRESHOLD = 0.75;
+    const REQUIRED_CONSECUTIVE_FRAMES = 6;
+
+    // 레이블별 화면 문구 및 음성 메시지 매핑
+    const GREETING_CONFIG = {
+      "나": {
+        text: "안녕하세요?",
+        speech: "안녕하세요?",
+        className: "greeting-msg me"
+      },
+      "친구": {
+        text: "누구세요?",
+        speech: "누구세요?",
+        className: "greeting-msg friend"
+      },
+      "둘다": {
+        text: "둘이 같이왔네요!",
+        speech: "둘이 같이왔네요!",
+        className: "greeting-msg both"
+      },
+      "배경": {
+        text: "사람 없음 (인사말 없음)",
+        speech: null,
+        className: "greeting-msg idle"
+      }
+    };
+
+    const statusPillEl = document.getElementById("status-pill");
+    const webcamContainerEl = document.getElementById("webcam-container");
+    const barsContainerEl = document.getElementById("bars-container");
+    const stateLabelEl = document.getElementById("state-label");
+    const greetingMsgEl = document.getElementById("greeting-msg");
+
+    let model = null;
+    let webcam = null;
+    const barMap = {};
+
+    let candidateState = null;
+    let consecutiveFrames = 0;
+    let currentConfirmedState = null;
+
+    function normalizeLabel(raw) {
+      return String(raw).replace(/^\[|\]$/g, "").trim();
+    }
+
+    function speakKorean(text) {
+      if (!text || !("speechSynthesis" in window)) return;
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ko-KR";
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      const koVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko"));
+      if (koVoice) {
+        utterance.voice = koVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function renderBars(labels) {
+      barsContainerEl.innerHTML = "";
+      labels.forEach((rawLabel) => {
+        const key = normalizeLabel(rawLabel);
+
+        const item = document.createElement("div");
+        item.className = "bar-item";
+
+        const meta = document.createElement("div");
+        meta.className = "bar-meta";
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "bar-name";
+        nameEl.textContent = rawLabel;
+
+        const pctEl = document.createElement("span");
+        pctEl.className = "bar-pct";
+        pctEl.textContent = "0.0%";
+
+        const track = document.createElement("div");
+        track.className = "track";
+
+        const fill = document.createElement("div");
+        fill.className = "fill";
+
+        track.appendChild(fill);
+        meta.appendChild(nameEl);
+        meta.appendChild(pctEl);
+        item.appendChild(meta);
+        item.appendChild(track);
+        barsContainerEl.appendChild(item);
+
+        barMap[key] = { fillEl: fill, pctEl };
+      });
+    }
+
+    function commitState(nextKey) {
+      // 이전 확정 상태와 같으면 중복 발화 및 재표시 방지
+      if (nextKey === currentConfirmedState) return;
+      currentConfirmedState = nextKey;
+
+      Object.entries(barMap).forEach(([key, els]) => {
+        els.fillEl.classList.toggle("active", key === currentConfirmedState);
+      });
+
+      const cfg = GREETING_CONFIG[nextKey] || {
+        text: "인사말 없음",
+        speech: null,
+        className: "greeting-msg idle"
+      };
+
+      stateLabelEl.textContent = `확정 상태: [${nextKey}]`;
+      greetingMsgEl.textContent = cfg.text;
+      greetingMsgEl.className = cfg.className;
+
+      if (cfg.speech) {
+        speakKorean(cfg.speech);
+      }
+    }
+
+    async function predict() {
+      if (!model || !webcam) return;
+
+      const predictions = await model.predict(webcam.canvas);
+      let best = null;
+
+      for (let i = 0; i < predictions.length; i++) {
+        const { className, probability } = predictions[i];
+        const key = normalizeLabel(className);
+        const pctText = `${(probability * 100).toFixed(1)}%`;
+
+        if (barMap[key]) {
+          barMap[key].fillEl.style.width = pctText;
+          barMap[key].pctEl.textContent = pctText;
+        }
+
+        if (!best || probability > best.probability) {
+          best = { key, probability };
+        }
+      }
+
+      if (best && best.probability >= CONFIDENCE_THRESHOLD) {
+        if (best.key === candidateState) {
+          consecutiveFrames += 1;
+        } else {
+          candidateState = best.key;
+          consecutiveFrames = 1;
+        }
+
+        if (consecutiveFrames >= REQUIRED_CONSECUTIVE_FRAMES) {
+          commitState(candidateState);
+        }
+      } else {
+        candidateState = null;
+        consecutiveFrames = 0;
+      }
+    }
+
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function init() {
+      try {
+        statusPillEl.textContent = "모델 불러오는 중...";
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+
+        const labels = model.getClassLabels();
+        renderBars(labels);
+
+        statusPillEl.textContent = "웹캠 시작 중...";
+        webcam = new tmImage.Webcam(360, 360, true);
+        await webcam.setup();
+        await webcam.play();
+
+        webcamContainerEl.innerHTML = "";
+        webcamContainerEl.appendChild(webcam.canvas);
+
+        statusPillEl.textContent = "실시간 인식 중";
+        window.requestAnimationFrame(loop);
+      } catch (error) {
+        console.error("초기화 실패:", error);
+        statusPillEl.textContent = "초기화 오류";
+        greetingMsgEl.textContent = "모델 URL 또는 카메라 권한을 확인하세요.";
+        greetingMsgEl.className = "greeting-msg idle";
+      }
+    }
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
