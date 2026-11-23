@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 얼굴 인식 인사말 웹앱</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --warn: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 920px;
+      display: grid;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .dot.ready {
+      background: var(--success);
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .webcam-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #020617;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--card-border);
+    }
+
+    .webcam-box canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    .greeting-banner {
+      background: rgba(148, 163, 184, 0.1);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 14px;
+      padding: 18px;
+      min-height: 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .greeting-banner.state-yang {
+      background: rgba(34, 197, 94, 0.14);
+      border-color: rgba(34, 197, 94, 0.45);
+    }
+
+    .greeting-banner.state-kwon {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+
+    .greeting-banner.state-bg {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+
+    .state-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .greeting-text {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .prob-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .prob-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .prob-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .prob-header .confirmed-tag {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--success);
+      color: #052e16;
+      margin-left: 8px;
+      display: none;
+    }
+
+    .prob-item.is-confirmed .confirmed-tag {
+      display: inline-block;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 14px;
+      background: #0f172a;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      border-radius: 999px;
+      transition: width 0.12s ease-out;
+    }
+
+    .prob-item.is-confirmed .bar-fill {
+      background: linear-gradient(90deg, #16a34a, #4ade80);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--card-border);
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #334155;
+      color: var(--text);
+      border: 1px solid #475569;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #475569;
+    }
+
+    button.primary {
+      background: #0284c7;
+      border-color: #0ea5e9;
+    }
+
+    button.primary:hover {
+      background: #0369a1;
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      padding: 12px;
+      text-align: center;
+    }
+  </style>
+
+  <!-- TensorFlow.js & Teachable Machine Image Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>실시간 얼굴 인식 인사말</h1>
+      <div class="status-badge">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">모델 및 웹캠 로딩 중...</span>
+      </div>
+    </header>
+
+    <div class="main-grid">
+      <!-- 왼쪽: 웹캠 & 인사말 화면 -->
+      <section class="panel">
+        <div class="webcam-box" id="webcamContainer">
+          <div id="loadingPlaceholder" style="color: var(--muted); font-size: 0.9rem;">
+            카메라 권한을 허용해 주세요...
+          </div>
+        </div>
+
+        <div id="greetingBanner" class="greeting-banner state-bg">
+          <div class="state-label" id="stateLabel">확정 상태: 대기 중</div>
+          <div class="greeting-text" id="greetingText">대기 중입니다.</div>
+        </div>
+
+        <div class="btn-row">
+          <button id="enableSpeechBtn" class="primary" type="button">🔊 한국어 음성 활성화</button>
+          <button id="testSpeechBtn" type="button">음성 테스트</button>
+        </div>
+      </section>
+
+      <!-- 오른쪽: 레이블별 인식 확률 막대그래프 & 안정화 설정 -->
+      <section class="panel">
+        <h2 style="font-size: 1.05rem; font-weight: 700;">레이블별 인식 확률</h2>
+
+        <div class="prob-list" id="probList">
+          <!-- JS로 [양선진], [권규리], [배경] 항목 생성 -->
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label for="thresholdRange">
+              <span>최소 확신도</span>
+              <span id="thresholdVal">80%</span>
+            </label>
+            <input id="thresholdRange" type="range" min="50" max="95" step="5" value="80" />
+          </div>
+
+          <div class="control-group">
+            <label for="streakRange">
+              <span>연속 프레임 수</span>
+              <span id="streakVal">6프레임</span>
+            </label>
+            <input id="streakRange" type="range" min="2" max="15" step="1" value="6" />
+          </div>
+        </div>
+
+        <p style="font-size: 0.8rem; color: var(--muted); line-height: 1.5;">
+          • <strong>[양선진]</strong>: 환영 인사 화면 표시 및 음성 출력<br />
+          • <strong>[권규리]</strong>: "안녕하세요? 용건을 말해주세요" 표시 및 음성 출력<br />
+          • <strong>[배경]</strong>: 부재중(사람 없음) 처리, 인사말 미출력<br />
+          • 상태가 바뀔 때만 1회 말하며, 동일 상태 유지 시 중복 발화를 막습니다.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 설정값
+    // =========================================================================
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/HO_aGhewa/";
+    const LABELS = ["양선진", "권규리", "배경"];
+    const GREETINGS = {
+      "양선진": "환영합니다! 양선진 님, 반가워요.",
+      "권규리": "안녕하세요? 용건을 말해주세요",
+      "배경": ""
+    };
+
+    let confidenceThreshold = 0.80; // 일정 확신도 이상
+    let requiredStreak = 6;         // 여러 프레임 연속 감지 횟수
+
+    // =========================================================================
+    // 상태 변수
+    // =========================================================================
+    let model = null;
+    let webcam = null;
+    let isRunning = false;
+
+    let candidateLabel = null;      // 현재 연속 감지 중인 후보 레이블
+    let candidateStreak = 0;        // 후보 레이블 연속 프레임 카운트
+    let confirmedState = null;      // 확정된 현재 상태 ("양선진" | "권규리" | "배경" | null)
+
+    // =========================================================================
+    // DOM 요소
+    // =========================================================================
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const webcamContainer = document.getElementById("webcamContainer");
+    const loadingPlaceholder = document.getElementById("loadingPlaceholder");
+    const greetingBanner = document.getElementById("greetingBanner");
+    const stateLabelEl = document.getElementById("stateLabel");
+    const greetingTextEl = document.getElementById("greetingText");
+    const probListEl = document.getElementById("probList");
+
+    const thresholdRange = document.getElementById("thresholdRange");
+    const thresholdVal = document.getElementById("thresholdVal");
+    const streakRange = document.getElementById("streakRange");
+    const streakVal = document.getElementById("streakVal");
+    const enableSpeechBtn = document.getElementById("enableSpeechBtn");
+    const testSpeechBtn = document.getElementById("testSpeechBtn");
+
+    // 모델 클래스명과 대상 레이블([양선진], [권규리], [배경]) 매칭 정규화
+    function normalizeLabel(rawName) {
+      const cleaned = String(rawName || "").replace(/^\[\vert{}\]$/g, "").trim();
+      if (LABELS.includes(cleaned)) return cleaned;
+      return null;
+    }
+
+    // 막대그래프 UI 초기화
+    const barElements = {};
+    function initProbabilityBars() {
+      probListEl.innerHTML = "";
+      LABELS.forEach((label) => {
+        const item = document.createElement("div");
+        item.className = "prob-item";
+        item.dataset.label = label;
+
+        item.innerHTML = `
+          <div class="prob-header">
+            <span>[${label}]<span class="confirmed-tag">확정됨</span></span>
+            <span class="prob-percent">0.0%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill"></div>
+          </div>
+        `;
+
+        probListEl.appendChild(item);
+        barElements[label] = {
+          item,
+          percentEl: item.querySelector(".prob-percent"),
+          fillEl: item.querySelector(".bar-fill")
+        };
+      });
+    }
+
+    // 한국어 음성(Web Speech API) 출력 함수
+    function speakKorean(text) {
+      if (!text || !("speechSynthesis" in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "ko-KR";
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+        const koVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko"));
+        if (koVoice) {
+          utterance.voice = koVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn("음성 출력 오류:", err);
+      }
+    }
+
+    // 확정 상태 반영 (화면 표시 + 상태 전환 시 1회 음성 출력)
+    function applyConfirmedState(newState) {
+      const prevState = confirmedState;
+      confirmedState = newState;
+
+      // 막대그래프 확정 표시 업데이트
+      LABELS.forEach((lbl) => {
+        barElements[lbl].item.classList.toggle("is-confirmed", lbl === newState);
+      });
+
+      // 화면 인사말 업데이트
+      greetingBanner.classList.remove("state-yang", "state-kwon", "state-bg");
+      if (newState === "양선진") {
+        greetingBanner.classList.add("state-yang");
+        stateLabelEl.textContent = "확정 상태: [양선진]";
+        greetingTextEl.textContent = GREETINGS["양선진"];
+      } else if (newState === "권규리") {
+        greetingBanner.classList.add("state-kwon");
+        stateLabelEl.textContent = "확정 상태: [권규리]";
+        greetingTextEl.textContent = GREETINGS["권규리"];
+      } else {
+        greetingBanner.classList.add("state-bg");
+        stateLabelEl.textContent = "확정 상태: [배경] (사람 없음)";
+        greetingTextEl.textContent = "사람이 감지되지 않았습니다.";
+      }
+
+      // 이전 상태와 다른 상태로 바뀔 때만 1회 말하기 ([배경]은 말하지 않음)
+      if (newState !== prevState) {
+        if (newState === "양선진" || newState === "권규리") {
+          speakKorean(GREETINGS[newState]);
+        }
+      }
+    }
+
+    // 예측 결과 처리 및 연속 프레임 안정화
+    function handlePredictions(predictions) {
+      const probMap = {
+        "양선진": 0,
+        "권규리": 0,
+        "배경": 0
+      };
+
+      predictions.forEach((p) => {
+        const key = normalizeLabel(p.className);
+        if (key) {
+          probMap[key] += p.probability;
+        }
+      });
+
+      // 각 레이블 막대그래프 갱신
+      LABELS.forEach((label) => {
