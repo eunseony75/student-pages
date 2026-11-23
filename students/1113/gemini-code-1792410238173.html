@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 얼굴 인식 인사말</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 920px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      background: #334155;
+      color: var(--text);
+      border: 1px solid #475569;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    button:hover {
+      background: #475569;
+    }
+
+    .tts-hint {
+      font-size: 0.82rem;
+      color: var(--warning);
+      margin-bottom: 14px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .webcam-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #webcam-container {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #090d16;
+      border: 2px solid var(--border);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #webcam-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+    }
+
+    .greeting-box {
+      width: 100%;
+      min-height: 110px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .greeting-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .greeting-text {
+      font-size: 1.3rem;
+      font-weight: 700;
+      line-height: 1.45;
+      color: #ffffff;
+    }
+
+    .greeting-text.active-me {
+      color: var(--success);
+    }
+
+    .greeting-text.active-hello {
+      color: var(--accent);
+    }
+
+    .greeting-text.active-friend {
+      color: var(--warning);
+    }
+
+    .greeting-text.muted {
+      color: var(--muted);
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .prob-panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .prob-panel h2 {
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+
+    .prob-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .prob-item {
+      margin-bottom: 16px;
+    }
+
+    .prob-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .prob-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .prob-bar-bg {
+      width: 100%;
+      height: 14px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+
+    .prob-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      transition: width 0.12s ease-out;
+    }
+
+    .meta-footer {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.9rem;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>실시간 얼굴 인식 인사말</h1>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <div class="status-badge" id="system-status">
+          <span class="status-dot"></span>
+          <span>모델 및 웹캠 초기화 중...</span>
+        </div>
+        <div class="controls">
+          <button type="button" id="btn-test-tts">음성 테스트</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tts-hint" id="tts-hint">
+      소리가 안 나오면 화면 아무 곳이나 한 번 클릭하거나 [음성 테스트] 버튼을 눌러주세요. (브라우저 자동재생 정책)
+    </div>
+
+    <div class="main-grid">
+      <div class="webcam-box">
+        <div id="webcam-container"></div>
+        <div id="error-box" class="error-msg"></div>
+
+        <div class="greeting-box">
+          <div class="greeting-label" id="state-caption">확정 상태: 대기 중</div>
+          <div class="greeting-text muted" id="greeting-display">
+            카메라가 준비되면 얼굴을 인식합니다.
+          </div>
+        </div>
+      </div>
+
+      <div class="prob-panel">
+        <h2>레이블별 인식 확률</h2>
+        <p class="prob-desc">
+          확신도 70% 이상에서 6프레임 연속 감지 시 상태가 확정됩니다.
+        </p>
+        <div id="label-container"></div>
+
+        <div class="meta-footer">
+          <span id="streak-info">연속 감지: 0 / 6 프레임</span>
+          <span id="last-spoken">최근 발화: 없음</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TensorFlow.js & Teachable Machine Image Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/KNnC8gKFFh/";
+
+    // 안정화 설정: 일정 확신도 이상에서 N프레임 연속 감지되어야 상태 확정
+    const CONFIDENCE_THRESHOLD = 0.70;
+    const REQUIRED_CONSECUTIVE_FRAMES = 6;
+
+    const LABELS = {
+      ME: "나",
+      HELLO: "안녕하세요",
+      FRIEND: "친구",
+      BG: "배경"
+    };
+
+    const GREETINGS = {
+      [LABELS.ME]: "어서 와!",
+      [LABELS.HELLO]: "안녕하세요? 용건을 말해주세요",
+      [LABELS.FRIEND]: "반가워 친구야",
+      [LABELS.BG]: "아무도 없네"
+    };
+
+    let model = null;
+    let webcam = null;
+    let maxPredictions = 0;
+
+    let candidateLabel = null;
+    let consecutiveCount = 0;
+    let confirmedState = null;
+    let audioUnlocked = false;
+    let speakTimer = null;
+    let activeUtterance = null; // 가비지 컬렉션으로 발화가 끊기는 현상 방지
+
+    const barElements = {};
+    const valueElements = {};
+
+    const systemStatusEl = document.getElementById("system-status");
+    const errorBoxEl = document.getElementById("error-box");
+    const labelContainerEl = document.getElementById("label-container");
+    const stateCaptionEl = document.getElementById("state-caption");
+    const greetingDisplayEl = document.getElementById("greeting-display");
+    const streakInfoEl = document.getElementById("streak-info");
+    const lastSpokenEl = document.getElementById("last-spoken");
+    const testTtsBtn = document.getElementById("btn-test-tts");
+    const ttsHintEl = document.getElementById("tts-hint");
+
+    function setSystemStatus(text, isError = false) {
+      systemStatusEl.innerHTML = `<span class="status-dot"></span><span>${text}</span>`;
+      if (isError) {
+        systemStatusEl.style.background = "rgba(248, 113, 113, 0.15)";
+        systemStatusEl.style.color = "#f87171";
+        systemStatusEl.style.borderColor = "rgba(248, 113, 113, 0.35)";
+      }
+    }
+
+    function buildProbabilityBars(classLabels) {
+      labelContainerEl.innerHTML = "";
+      classLabels.forEach((className) => {
+        const item = document.createElement("div");
+        item.className = "prob-item";
+
+        const meta = document.createElement("div");
+        meta.className = "prob-meta";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = className;
+
+        const valSpan = document.createElement("span");
+        valSpan.textContent = "0.0%";
+
+        const barBg = document.createElement("div");
+        barBg.className = "prob-bar-bg";
+
+        const barFill = document.createElement("div");
+        barFill.className = "prob-bar-fill";
+
+        barBg.appendChild(barFill);
+        meta.appendChild(nameSpan);
+        meta.appendChild(valSpan);
+        item.appendChild(meta);
+        item.appendChild(barBg);
+        labelContainerEl.appendChild(item);
+
+        valueElements[className] = valSpan;
+        barElements[className] = barFill;
+      });
+    }
+
+    function unlockSpeechSynthesis() {
+      if (!("speechSynthesis" in window)) return;
+      audioUnlocked = true;
+      ttsHintEl.textContent = "음성 안내(TTS) 준비 완료";
+      ttsHintEl.style.color = "#22c55e";
+      try {
+        window.speechSynthesis.resume();
+      } catch (e) {}
+    }
+
+    function speakKorean(text) {
+      if (!text) return;
+      lastSpokenEl.textContent = `최근 발화: "${text}"`;
+
+      if (!("speechSynthesis" in window)) {
+        lastSpokenEl.textContent = `최근 발화(TTS 미지원): "${text}"`;
+        return;
+      }
+
+      if (speakTimer) {
+        clearTimeout(speakTimer);
+      }
+
+      try {
+        window.speechSynthesis.resume();
+        window.speechSynthesis.cancel();
+      } catch (err) {
+        console.warn("TTS 제어 오류:", err);
+      }
+
+      // cancel() 직후 speak()를 호출하면 일부 브라우저에서 무시되는 문제를 피하기 위해 60ms 후 실행
+      speakTimer = setTimeout(() => {
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "ko-KR";
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          const voices = window.speechSynthesis.getVoices();
+          const koVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko"));
+          if (koVoice) {
+            utterance.voice = koVoice;
+          }
+
+          utterance.onerror = (event) => {
+            if (event.error === "not-allowed") {
+              ttsHintEl.textContent = "브라우저가 자동 음성을 막았습니다. 화면을 클릭하거나 [음성 테스트]를 눌러주세요.";
+              ttsHintEl.style.color = "#f59e0b";
+            }
+          };
+
+          activeUtterance = utterance;
+          window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utterance);
+        } catch (err) {
+          console.warn("음성 합성 오류:", err);
+        }
+      }, 60);
+    }
+
+    function updateGreetingUI(state) {
+      greetingDisplayEl.className = "greeting-text";
+
+      if (!state) {
+        stateCaptionEl.textContent = "확정 상태: 대기 중";
+        greetingDisplayEl.textContent = "카메라가 준비되면 얼굴을 인식합니다.";
+        greetingDisplayEl.classList.add("muted");
+        return;
+      }
+
+      const message = GREETINGS[state] || `${state} 상태가 인식되었습니다.`;
+      stateCaptionEl.textContent = state === LABELS.BG
+        ? `확정 상태: ${LABELS.BG} (사람 없음)`
+        : `확정 상태: ${state}`;
+      greetingDisplayEl.textContent = message;
+
+      if (state === LABELS.ME) {
+        greetingDisplayEl.classList.add("active-me");
+      } else if (state === LABELS.HELLO) {
+        greetingDisplayEl.classList.add("active-hello");
+      } else if (state === LABELS.FRIEND) {
+        greetingDisplayEl.classList.add("active-friend");
+      } else {
+        greetingDisplayEl.classList.add("muted");
+      }
+    }
+
+    function processStabilizedState(predictions) {
+      let topPred = predictions[0];
+      for (let i = 1; i < predictions.length; i++) {
+        if (predictions[i].probability > topPred.probability) {
+          topPred = predictions[i];
+        }
+      }
+
+      if (topPred && topPred.probability >= CONFIDENCE_THRESHOLD) {
+        if (candidateLabel === topPred.className) {
+          consecutiveCount += 1;
+        } else {
+          candidateLabel = topPred.className;
+          consecutiveCount = 1;
+        }
+      } else {
+        candidateLabel = null;
+        consecutiveCount = 0;
+      }
+
+      streakInfoEl.textContent =
+        `연속 감지: ${consecutiveCount} / ${REQUIRED_CONSECUTIVE_FRAMES} 프레임` +
+        (candidateLabel ? ` (${candidateLabel})` : "");
+
+      if (candidateLabel && consecutiveCount >= REQUIRED_CONSECUTIVE_FRAMES) {
+        const nextState = candidateLabel;
+
+        if (nextState !== confirmedState) {
+          confirmedState = nextState;
+          updateGreetingUI(confirmedState);
+
+          const speechText = GREETINGS[confirmedState] || `${confirmedState}로 인식되었습니다.`;
+          speakKorean(speechText);
+        }
+      }
+    }
+
+    async function loop() {
+      if (webcam && model) {
+        webcam.update();
+        const predictions = await model.predict(webcam.canvas);
+
+        for (let i = 0; i < maxPredictions; i++) {
+          const pred = predictions[i];
+          const pct = (pred.probability * 100).toFixed(1);
+          if (valueElements[pred.className]) {
+            valueElements[pred.className].textContent = `${pct}%`;
+          }
+          if (barElements[pred.className]) {
+            barElements[pred.className].style.width = `${pct}%`;
+          }
+        }
+
+        processStabilizedState(predictions);
+      }
+      window.requestAnimationFrame(loop);
+    }
+
+    async function init() {
+      try {
+        const modelURL = MODEL_URL + "model.json";
+        const metadataURL = MODEL_URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        const classLabels = model.getClassLabels();
+        buildProbabilityBars(classLabels);
+        updateGreetingUI(confirmedState);
+
+        const flip = true;
+        webcam = new tmImage.Webcam(360, 360, flip);
+        await webcam.setup();
+        await webcam.play();
+
+        const webcamContainer = document.getElementById("webcam-container");
+        webcamContainer.innerHTML = "";
+        webcamContainer.appendChild(webcam.canvas);
+
+        setSystemStatus("실시간 인식 중");
+        window.requestAnimationFrame(loop);
+      } catch (err) {
+        console.error(err);
+        setSystemStatus("초기화 실패", true);
+        errorBoxEl.textContent =
+          "웹캠 또는 티쳐블머신 모델을 불러오지 못했습니다. 카메라 권한과 모델 URL을 확인해주세요.";
+      }
+    }
+
+    testTtsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      unlockSpeechSynthesis();
+      speakKorean("음성 안내가 정상 작동합니다.");
+    });
+
+    // 사용자 첫 클릭/터치 시 speechSynthesis 자동재생 제한 해제
+    document.addEventListener("pointerdown", () => {
+      if (!audioUnlocked) {
+        unlockSpeechSynthesis();
+      }
+    }, { once: true });
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
