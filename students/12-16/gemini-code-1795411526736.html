@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediaPipe Hand Laser Cannon</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #06050d;
+      color: #f4efff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      overflow: hidden;
+    }
+
+    #stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 45%, #170d2e 0%, #07050f 75%);
+    }
+
+    /* 원본 비디오는 캔버스에 미러링하여 그리므로 숨김 처리 */
+    video#webcam {
+      display: none;
+    }
+
+    canvas#outputCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* 상단 상태 HUD */
+    .hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 10;
+      gap: 16px;
+    }
+
+    .panel {
+      background: rgba(13, 9, 26, 0.72);
+      border: 1px solid rgba(186, 104, 255, 0.35);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 12px 16px;
+      box-shadow: 0 0 24px rgba(155, 38, 255, 0.18);
+    }
+
+    .status-title {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c79bff;
+      margin-bottom: 4px;
+    }
+
+    .status-state {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 0 12px rgba(196, 92, 255, 0.8);
+    }
+
+    .guide-box {
+      max-width: 420px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #dfd0ff;
+    }
+
+    .guide-box strong {
+      color: #e9b8ff;
+    }
+
+    /* 시작/에러 오버레이 */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 4, 14, 0.88);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      z-index: 20;
+    }
+
+    #overlay.hidden {
+      display: none;
+    }
+
+    #overlay h1 {
+      font-size: clamp(24px, 4vw, 36px);
+      margin-bottom: 12px;
+      color: #ffffff;
+      text-shadow: 0 0 20px rgba(177, 59, 255, 0.85);
+    }
+
+    #overlay p {
+      max-width: 480px;
+      color: #d6c4ff;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      font-size: 15px;
+    }
+
+    #startBtn {
+      background: linear-gradient(135deg, #9d2bff 0%, #d946ef 100%);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 0 28px rgba(183, 64, 255, 0.65);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    #startBtn:hover {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 0 0 36px rgba(217, 70, 239, 0.85);
+    }
+
+    #startBtn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #errorMsg {
+      margin-top: 14px;
+      color: #ff8ab8;
+      font-size: 14px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="outputCanvas"></canvas>
+
+    <div class="hud">
+      <div class="panel">
+        <div class="status-title">Energy Cannon Status</div>
+        <div class="status-state" id="stateLabel">대기 중</div>
+      </div>
+      <div class="panel guide-box">
+        <strong>1.</strong> 손을 <strong>완전히 펴서</strong> 대기 →
+        <strong>2.</strong> 손을 <strong>오므려</strong> 보라색 구체 충전 →
+        <strong>3.</strong> 다시 <strong>펴면(보자기)</strong> 전방 레이저 발사!
+      </div>
+    </div>
+
+    <div id="overlay">
+      <h1>NEON HAND LASER CANNON</h1>
+      <p>
+        전면 카메라로 손 랜드마크를 실시간 추적합니다.<br />
+        손을 활짝 편 뒤 오므려 보라색 에너지를 모으고, 다시 펴서 전방으로 레이저 빔을 발사하세요.
+      </p>
+      <button id="startBtn">카메라 시작하기</button>
+      <div id="errorMsg"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
+    const stateLabel = document.getElementById("stateLabel");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("startBtn");
+    const errorMsg = document.getElementById("errorMsg");
+
+    // 손 연결선 인덱스 (MediaPipe Hands 21 landmarks)
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],       // 엄지
+      [0, 5], [5, 6], [6, 7], [7, 8],       // 검지
+      [5, 9], [9, 10], [10, 11], [11, 12],  // 중지
+      [9, 13], [13, 14], [14, 15], [15, 16],// 약지
+      [13, 17], [17, 18], [18, 19], [19, 20],// 소지
+      [0, 17]                               // 손바닥 하단
+    ];
+
+    /**
+     * 제스처 상태 머신:
+     * - "IDLE": 초기/대기 상태 (손을 완전히 펴면 "READY_OPEN"으로 전환)
+     * - "READY_OPEN": 손이 완전히 펴진 상태 (손을 오므리면 "CHARGING"으로 전환)
+     * - "CHARGING": 손바닥에 보라색 네온 에너지 구체 충전 중 (다시 펴면 "FIRING"으로 전환)
+     * - "FIRING": 전방으로 굵은 레이저 빔 발사 중
+     */
+    const handCombatState = {
+      phase: "IDLE",
+      charge: 0,          // 0.0 ~ 1.0
+      fireTimer: 0,       // 발사 남은 시간 (초)
+      fireDuration: 0.65, // 빔 지속 시간 (초)
+      recoil: 0,          // 반동 효과 (0 ~ 1)
+      palmPos: null,      // 캔버스 좌표 { x, y }
+      aimDir: { x: 0, y: -1 }, // 손 기준 전방(손목 -> 중지 방향) 단위 벡터
+      screenShake: 0
+    };
+
+    // 스파크/파티클 배열
+    const particles = [];
+
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let lastFrameTime = performance.now();
+    let animFrameId = null;
+
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    async function initHandLandmarker() {
+      startBtn.disabled = true;
+      startBtn.textContent = "모델 로딩 중...";
+      errorMsg.textContent = "";
+
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+          minHandDetectionConfidence: 0.55,
+          minHandPresenceConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+
+        await startCamera();
+        overlay.classList.add("hidden");
+        lastFrameTime = performance.now();
+        renderLoop(lastFrameTime);
+      } catch (err) {
+        console.error(err);
+        errorMsg.textContent =
+          "카메라 또는 모델을 초기화할 수 없습니다: " + (err?.message || err);
+        startBtn.disabled = false;
+        startBtn.textContent = "다시 시도하기";
+      }
+    }
+
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("이 브라우저는 카메라 API를 지원하지 않습니다.");
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          video.play();
+          resolve();
+        };
+      });
+    }
+
+    function dist3D(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dz = (a.z || 0) - (b.z || 0);
+      return Math.hypot(dx, dy, dz);
+    }
+
+    /**
+     * 손가락 펴짐/오므림 정도를 0(완전 오므림) ~ 1(완전 펴짐) 범위로 계산
+     * 손목(0)과 중지 MCP(9) 사이의 거리를 손 크기로 정규화
+     */
+    function computeOpenness(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmScale = Math.max(dist3D(wrist, middleMcp), 0.05);
+
+      // 검지(8), 중지(12), 약지(16), 소지(20) 끝과 손목(0)의 거리 비율
+      const fingerTips = [8, 12, 16, 20];
+      let sumRatio = 0;
+
+      for (const tipIdx of fingerTips) {
+        const d = dist3D(wrist, landmarks[tipIdx]);
+        // 손이 펴지면 d / palmScale이 약 1.8~2.2, 오므리면 약 0.7~1.05
+        const norm = (d / palmScale - 0.85) / (1.95 - 0.85);
+        sumRatio += Math.max(0, Math.min(1, norm));
+      }
+
+      // 엄지(4)는 소지 MCP(17) 또는 검지 MCP(5) 기준 펴짐 보조 반영
+      const thumbDist = dist3D(landmarks[4], landmarks[17]);
+      const thumbNorm = Math.max(0, Math.min(1, (thumbDist / palmScale - 0.75) / (1.65 - 0.75)));
+
+      return (sumRatio / fingerTips.length) * 0.85 + thumbNorm * 0.15;
+    }
+
+    /**
+     * 정규화 랜드마크(0~1)를 미러링된 캔버스 좌표로 변환
+     * "object-fit: cover"와 유사하게 비율 유지 채움
+     */
+    function toCanvasPoint(lm, viewW, viewH) {
+      const vidW = video.videoWidth || 1280;
+      const vidH = video.videoHeight || 720;
+      const scale = Math.max(viewW / vidW, viewH / vidH);
+      const drawW = vidW * scale;
+      const drawH = vidH * scale;
+      const offsetX = (viewW - drawW) * 0.5;
+      const offsetY = (viewH - drawH) * 0.5;
+
+      // 전면 카메라 좌우 반전: (1 - lm.x)
+      const x = offsetX + (1 - lm.x) * drawW;
+      const y = offsetY + lm.y * drawH;
+      return { x, y };
+    }
+
+    /**
+     * 손바닥 중심 좌표와 손 기준 '전방' 방향 벡터 계산
+     */
+    function computePalmAndAim(landmarks, viewW, viewH) {
+      const palmIndices = [0, 5, 9, 13, 17];
+      let sx = 0;
+      let sy = 0;
+      for (const idx of palmIndices) {
+        const pt = toCanvasPoint(landmarks[idx], viewW, viewH);
+        sx += pt.x;
+        sy += pt.y;
+      }
+      const palmPos = { x: sx / palmIndices.length, y: sy / palmIndices.length };
+
+      const wristPt = toCanvasPoint(landmarks[0], viewW, viewH);
+      const middleMcpPt = toCanvasPoint(landmarks[9], viewW, viewH);
+      let dx = middleMcpPt.x - wristPt.x;
+      let dy = middleMcpPt.y - wristPt.y;
+      const len = Math.hypot(dx, dy);
+
+      if (len > 1) {
+        dx /= len;
+        dy /= len;
+      } else {
+        dx = 0;
+        dy = -1;
+      }
+
+      return { palmPos, aimDir: { x: dx, y: dy } };
+    }
+
+    function spawnParticles(x, y, count, colorType = "charge", aimDir = { x: 0, y: -1 }) {
+      for (let i = 0; i < count; i++) {
+        if (particles.length > 260) particles.shift();
+
+        if (colorType === "charge") {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 26 + Math.random() * 44;
+          particles.push({
+            x: x + Math.cos(angle) * radius,
+            y: y + Math.sin(angle) * radius,
+            targetX: x,
+            targetY: y,
+            vx: 0,
+            vy: 0,
+            pullToCenter: true,
+            life: 0,
+            maxLife: 0.35 + Math.random() * 0.3,
+            size: 2 + Math.random() * 3.5,
+            hue: 272 + Math.random() * 26
+          });
+        } else {
+          // 레이저 발사 스파크
+          const baseAngle = Math.atan2(aimDir.y, aimDir.x);
+          const spread = (Math.random() - 0.5) * 0.75;
+          const speed = 260 + Math.random() * 640;
+          const angle = baseAngle + spread;
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            pullToCenter: false,
+            life: 0,
+            maxLife: 0.25 + Math.random() * 0.35,
+            size: 2.5 + Math.random() * 4.5,
+            hue: 278 + Math.random() * 34
+          });
+        }
+      }
+    }
+
+    function updateStateMachine(landmarks, dt, viewW, viewH) {
+      if (handCombatState.fireTimer > 0) {
+        handCombatState.fireTimer = Math.max(0, handCombatState.fireTimer - dt);
+      }
+      handCombatState.recoil = Math.max(0, handCombatState.recoil - dt * 3.2);
+      handCombatState.screenShake = Math.max(0, handCombatState.screenShake - dt * 4.5);
+
+      if (!landmarks) {
+        // 손이 화면에서 사라졌을 때 발사 중이면 자연스럽게 종료
+        if (handCombatState.phase === "FIRING" && handCombatState.fireTimer <= 0) {
+          handCombatState.phase = "IDLE";
+          handCombatState.charge = 0;
+        }
+        updateHUD();
+        return;
+      }
+
+      const openness = computeOpenness(landmarks);
+      const { palmPos, aimDir } = computePalmAndAim(landmarks, viewW, viewH);
+      handCombatState.palmPos = palmPos;
+      handCombatState.aimDir = aimDir;
+
+      // 임계값: 0.72 이상이면 '완전히 편 상태(보자기)', 0.34 이하면 '오므린 상태'
+      const OPEN_THRESHOLD = 0.72;
+      const CLOSED_THRESHOLD = 0.34;
+
+      if (handCombatState.phase === "FIRING") {
+        if (handCombatState.fireTimer > 0) {
+          spawnParticles(palmPos.x, palmPos.y, 6, "laser", aimDir);
+        } else {
+          // 발사 종료 후 손이 펴져 있으면 READY_OPEN, 오므려져 있으면 IDLE
+          handCombatState.charge = 0;
+          handCombatState.phase = openness >= OPEN_THRESHOLD ? "READY_OPEN" : "IDLE";
+        }
+      } else if (handCombatState.phase === "IDLE") {
+        if (openness >= OPEN_THRESHOLD) {
+          handCombatState.phase = "READY_OPEN";
+        }
+      } else if (handCombatState.phase === "READY_OPEN") {
+        if (openness <= CLOSED_THRESHOLD) {
+          handCombatState.phase = "CHARGING";
+          handCombatState.charge = Math.max(handCombatState.charge, 0.15);
+        }
+      } else if (handCombatState.phase === "CHARGING") {
+        // 손을 오므린 채 유지할수록 보라색 네온 구체 충전
+        handCombatState.charge = Math.min(1, handCombatState.charge + dt * 1.15);
+        spawnParticles(palmPos.x, palmPos.y, 4, "charge", aimDir);
+
+        // 충전이 어느 정도 된 상태에서 손을 다시 펴면(보자기 모양) 레이저 발사!
+        if (openness >= OPEN_THRESHOLD && handCombatState.charge >= 0.25) {
+          handCombatState.phase = "FIRING";
+          handCombatState.fireTimer = handCombatState.fireDuration;
+          handCombatState.recoil = 1;
+          handCombatState.screenShake = 1;
+          spawnParticles(palmPos.x, palmPos.y, 28, "laser", aimDir);
+        }
+      }
+
+      updateHUD(openness);
+    }
+
+    function updateHUD(openness = 0) {
+      const pct = Math.round(handCombatState.charge * 100);
+      switch (handCombatState.phase) {
+        case "IDLE":
+          stateLabel.textContent = "손을 완전히 펴세요 (준비 대기)";
+          break;
+        case "READY_OPEN":
+          stateLabel.textContent = "보자기 준비 완료 — 손을 오므려 충전하세요";
+          break;
+        case "CHARGING":
+          stateLabel.textContent = `보라색 에너지 충전 중 (${pct}%) — 펴면 발사!`;
+          break;
+        case "FIRING":
+          stateLabel.textContent = "⚡ 네온 레이저 빔 발사 중! ⚡";
+          break;
+      }
+      void openness;
+    }
+
+    function updateAndDrawParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        if (p.pullToCenter && handCombatState.palmPos) {
+          const dx = handCombatState.palmPos.x - p.x;
+          const dy = handCombatState.palmPos.y - p.y;
+          p.x += dx * Math.min(1, dt * 9);
+          p.y += dy * Math.min(1, dt * 9);
+        } else {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+
+        const alpha = 1 - p.life / p.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 70%, 1)`;
+        ctx.shadowColor = `hsla(${p.hue}, 100%, 60%, 1)`;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawHandSkeleton(landmarks, viewW, viewH) {
+      const pts = landmarks.map((lm) => toCanvasPoint(lm, viewW, viewH));
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(192, 132, 252, 0.55)";
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = "rgba(168, 85, 247, 0.7)";
+      ctx.shadowBlur = 8;
+
+      for (const [a, b] of HAND_CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(pts[a].x, pts[a].y);
+        ctx.lineTo(pts[b].x, pts[b].y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < pts.length; i++) {
+        const isTip = [4, 8, 12, 16, 20].includes(i);
+        ctx.fillStyle = isTip ? "#f5d0fe" : "#c084fc";
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, isTip ? 5 : 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    /**
+     * 손바닥에 보라색 네온 에너지 구체 렌더링
+     */
+    function drawPurpleEnergyOrb(palmPos, charge, timeSec) {
+      if (!palmPos || charge <= 0.01) return;
+
+      const baseRadius = 14 + charge * 38;
+      const pulse = Math.sin(timeSec * 14) * (2.5 + charge * 4);
+      const radius = Math.max(8, baseRadius + pulse);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // 외곽 보라색 네온 글로우
+      const outerGrad = ctx.createRadialGradient(
+        palmPos.x,
+        palmPos.y,
+        radius * 0.1,
+        palmPos.x,
+        palmPos.y,
+        radius * 2.1
+      );
+      outerGrad.addColorStop(0, "rgba(248, 210, 255, 0.95)");
+      outerGrad.addColorStop(0.28, "rgba(192, 38, 255, 0.85)");
+      outerGrad.addColorStop(0.65, "rgba(126, 34, 206, 0.35)");
+      outerGrad.addColorStop(1, "rgba(88, 28, 135, 0)");
+
+      ctx.fillStyle = outerGrad;
+      ctx.beginPath();
+      ctx.arc(palmPos.x, palmPos.y, radius * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 회전하는 네온 에너지 링
+      ctx.strokeStyle = `rgba(232, 121, 249, ${0.45 + charge * 0.5})`;
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#d946ef";
+      ctx.shadowBlur = 16;
+
+      for (let r = 0; r < 2; r++) {
+        ctx.save();
+        ctx.translate(palmPos.x, palmPos.y);
+        ctx.rotate(timeSec * (r === 0 ? 3.2 : -4.4) + r);
+        ctx.scale(1, r === 0 ? 0.55 : 1.35);
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.92, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 밝은 백색-보라 코어
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "#c026fc";
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(palmPos.x, palmPos.y, radius * 0.36, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    /**
+     * 손바닥에서 전방으로 뻗어나가는 굵은 보라색 네온 레이저 빔 렌더링
+     */
+    function drawLaserBeam(palmPos, aimDir, fireTimer, fireDuration, viewW, viewH, timeSec) {
+      if (!palmPos || fireTimer <= 0) return;
+
+      const progress = 1 - fireTimer / fireDuration; // 0(시작) -> 1(소멸)
+      // 초반에 굵게 뻗었다가 끝부분에 수축
+      const envelope = progress < 0.2 ? progress / 0.2 : Math.max(0, 1 - (progress - 0.2) / 0.8);
+      const beamLength = Math.hypot(viewW, viewH) * 1.35;
+
+      const endX = palmPos.x + aimDir.x * beamLength;
+      const endY = palmPos.y + aimDir.y * beamLength;
+
+      // 수직 벡터 (빔 두께 방향)
+      const perpX = -aimDir.y;
+      const perpY = aimDir.x;
+
+      const flicker = 0.88 + Math.sin(timeSec * 48) * 0.12;
+      const outerWidth = 96 * envelope * flicker;
+      const midWidth = 48 * envelope * flicker;
+      const coreWidth = 18 * envelope * flicker;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+
+      // 1. 외곽 넓은 네온 아우라
+      ctx.strokeStyle = `rgba(147, 51, 234, ${0.42 * envelope})`;
+      ctx.lineWidth = Math.max(2, outerWidth);
+      ctx.shadowColor = "#9333ea";
+      ctx.shadowBlur = 40;
+      ctx.beginPath();
+      ctx.moveTo(palmPos.x, palmPos.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // 2. 중간 마젠타-보라 빔 바디
+      ctx.strokeStyle = `rgba(217, 70, 239, ${0.78 * envelope})`;
+      ctx.lineWidth = Math.max(2, midWidth);
+      ctx.shadowColor = "#e879f9";
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.moveTo(palmPos.x, palmPos.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // 3. 중심 초고휘도 코어
+      ctx.strokeStyle = `rgba(255, 245, 255, ${0.96 * envelope})`;
+      ctx.lineWidth = Math.max(1.5, coreWidth);
+      ctx.shadowColor = "#ffffff";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.moveTo(palmPos.x, palmPos.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // 4. 빔 내부 지그재그 전기/에너지 파동
+      ctx.strokeStyle = `rgba(245, 208, 254, ${0.85 * envelope})`;
+      ctx.lineWidth = Math.max(1.5, 5 * envelope);
+      ctx.beginPath();
+      const segments = 24;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const wave =
+          Math.sin(t * 22 - timeSec * 36) *
+          (midWidth * 0.36) *
+          Math.sin(t * Math.PI);
+        const px = palmPos.x + aimDir.x * beamLength * t + perpX * wave;
+        const py = palmPos.y + aimDir.y * beamLength * t + perpY * wave;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // 5. 손바닥 발사구 머즐 플래시
+      const muzzleRadius = (42 + Math.sin(timeSec * 40) * 8) * envelope;
+      const muzzleGrad = ctx.createRadialGradient(
+        palmPos.x,
+        palmPos.y,
+        2,
+        palmPos.x,
+        palmPos.y,
+        muzzleRadius * 1.8
+      );
+      muzzleGrad.addColorStop(0, "rgba(255, 255, 255, 1)");
+      muzzleGrad.addColorStop(0.35, "rgba(232, 121, 249, 0.9)");
+      muzzleGrad.addColorStop(1, "rgba(147, 51, 234, 0)");
+
+      ctx.fillStyle = muzzleGrad;
+      ctx.beginPath();
+      ctx.arc(palmPos.x, palmPos.y, muzzleRadius * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawVideoMirrored(viewW, viewH) {
+      const vidW = video.videoWidth || 1280;
+      const vidH = video.videoHeight || 720;
+      const scale = Math.max(viewW / vidW, viewH / vidH);
+      const drawW = vidW * scale;
+      const drawH = vidH * scale;
+      const offsetX = (viewW - drawW) * 0.5;
+      const offsetY = (viewH - drawH) * 0.5;
+
+      ctx.save();
+      ctx.translate(offsetX + drawW, offsetY);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, drawW, drawH);
+      ctx.restore();
+
+      // 네온 이펙트가 돋보이도록 살짝 어두운 보라빛 틴트 오버레이
+      ctx.fillStyle = "rgba(10, 5, 22, 0.28)";
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    function renderLoop(now) {
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
+      lastFrameTime = now;
+      const timeSec = now / 1000;
+
+      const rect = canvas.getBoundingClientRect();
+      const viewW = rect.width;
+      const viewH = rect.height;
+
+      let landmarks = null;
+      if (handLandmarker && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const result = handLandmarker.detectForVideo(video, now);
+        if (result.landmarks && result.landmarks.length > 0) {
+          landmarks = result.landmarks[0];
+        }
+      }
+
+      updateStateMachine(landmarks, dt, viewW, viewH);
+
+      ctx.save();
+      if (handCombatState.screenShake > 0) {
+        const mag = handCombatState.screenShake * 11;
+        const sx = (Math.random() - 0.5) * 2 * mag;
+        const sy = (Math.random() - 0.5) * 2 * mag;
+        ctx.translate(sx, sy);
+      }
+
+      drawVideoMirrored(viewW, viewH);
+
+      if (landmarks) {
+        drawHandSkeleton(landmarks, viewW, viewH);
+      }
+
+      if (handCombatState.phase === "CHARGING") {
+        drawPurpleEnergyOrb(handCombatState.palmPos, handCombatState.charge, timeSec);
+      }
+
+      if (handCombatState.phase === "FIRING") {
+        drawLaserBeam(
+          handCombatState.palmPos,
+          handCombatState.aimDir,
+          handCombatState.fireTimer,
+          handCombatState.fireDuration,
+          viewW,
+          viewH,
+          timeSec
+        );
+      }
+
+      updateAndDrawParticles(dt);
+      ctx.restore();
+
+      animFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    startBtn.addEventListener("click", initHandLandmarker);
+
+    window.addEventListener("beforeunload", () => {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((t) => t.stop());
+      }
+      if (handLandmarker) {
+        handLandmarker.close();
+      }
+    });
+  </script>
+</body>
+</html>
