@@ -11,10 +11,9 @@
       --card-border: #334155;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --accent-me: #22c55e;
-      --accent-friend: #38bdf8;
+      --accent-soi: #22c55e;
+      --accent-heeju: #38bdf8;
       --accent-bg: #64748b;
-      --danger: #ef4444;
     }
 
     * {
@@ -132,13 +131,13 @@
       transition: border-color 0.2s ease, background-color 0.2s ease;
     }
 
-    .greeting-box.state-me {
-      border-color: var(--accent-me);
+    .greeting-box.state-soi {
+      border-color: var(--accent-soi);
       background: rgba(34, 197, 94, 0.12);
     }
 
-    .greeting-box.state-friend {
-      border-color: var(--accent-friend);
+    .greeting-box.state-heeju {
+      border-color: var(--accent-heeju);
       background: rgba(56, 189, 248, 0.12);
     }
 
@@ -202,12 +201,12 @@
       transition: width 0.12s linear, background-color 0.2s ease;
     }
 
-    .bar-fill.fill-me {
-      background: var(--accent-me);
+    .bar-fill.fill-soi {
+      background: var(--accent-soi);
     }
 
-    .bar-fill.fill-friend {
-      background: var(--accent-friend);
+    .bar-fill.fill-heeju {
+      background: var(--accent-heeju);
     }
 
     .bar-fill.fill-bg {
@@ -285,13 +284,13 @@
   <script>
     const MODEL_URL = "https://teachablemachine.withgoogle.com/models/myYV9gaGW/";
 
-    // 흔들림 방지를 위한 임계값 및 연속 프레임 수
+    // 프레임 흔들림 방지를 위한 확신도 기준 및 연속 프레임 수
     const CONFIDENCE_THRESHOLD = 0.75;
     const REQUIRED_CONSECUTIVE_FRAMES = 6;
 
     const GREETINGS = {
-      ME: "어서 오세요! 반갑습니다.",
-      FRIEND: "안녕하세요? 용건을 말해주세요",
+      SOI: "소이님, 환영합니다! 오늘도 반가워요.",
+      HEEJU: "안녕하세요? 용건을 말해주세요",
       BACKGROUND: ""
     };
 
@@ -320,11 +319,11 @@
       const cleaned = String(rawLabel || "").trim();
       const lower = cleaned.toLowerCase();
 
-      if (cleaned === "나" || cleaned === "[나]" || lower === "me") {
-        return "ME";
+      if (cleaned === "소이" || cleaned === "[소이]" || lower === "soi") {
+        return "SOI";
       }
-      if (cleaned === "친구" || cleaned === "[친구]" || lower === "friend") {
-        return "FRIEND";
+      if (cleaned === "희주" || cleaned === "[희주]" || lower === "heeju") {
+        return "HEEJU";
       }
       if (
         cleaned === "배경" ||
@@ -338,8 +337,8 @@
     }
 
     function getBarColorClass(category) {
-      if (category === "ME") return "fill-me";
-      if (category === "FRIEND") return "fill-friend";
+      if (category === "SOI") return "fill-soi";
+      if (category === "HEEJU") return "fill-heeju";
       return "fill-bg";
     }
 
@@ -416,23 +415,23 @@
       const prevState = confirmedState;
       confirmedState = newState;
 
-      greetingBox.classList.remove("state-me", "state-friend", "state-bg");
+      greetingBox.classList.remove("state-soi", "state-heeju", "state-bg");
 
-      if (newState === "ME") {
-        greetingBox.classList.add("state-me");
-        detectedLabel.textContent = `확정 상태: ${topClassName} (나)`;
-        greetingText.textContent = GREETINGS.ME;
+      if (newState === "SOI") {
+        greetingBox.classList.add("state-soi");
+        detectedLabel.textContent = `확정 상태: ${topClassName} (소이)`;
+        greetingText.textContent = GREETINGS.SOI;
         subInfo.textContent = `확신도 ${(topProb * 100).toFixed(1)}% · ${REQUIRED_CONSECUTIVE_FRAMES}프레임 연속 감지`;
-        if (prevState !== "ME") {
-          speakKorean(GREETINGS.ME);
+        if (prevState !== "SOI") {
+          speakKorean(GREETINGS.SOI);
         }
-      } else if (newState === "FRIEND") {
-        greetingBox.classList.add("state-friend");
-        detectedLabel.textContent = `확정 상태: ${topClassName} (친구)`;
-        greetingText.textContent = GREETINGS.FRIEND;
+      } else if (newState === "HEEJU") {
+        greetingBox.classList.add("state-heeju");
+        detectedLabel.textContent = `확정 상태: ${topClassName} (희주)`;
+        greetingText.textContent = GREETINGS.HEEJU;
         subInfo.textContent = `확신도 ${(topProb * 100).toFixed(1)}% · ${REQUIRED_CONSECUTIVE_FRAMES}프레임 연속 감지`;
-        if (prevState !== "FRIEND") {
-          speakKorean(GREETINGS.FRIEND);
+        if (prevState !== "HEEJU") {
+          speakKorean(GREETINGS.HEEJU);
         }
       } else {
         // [배경]: 사람이 없는 상태로 처리하고 인사말은 하지 않음
