@@ -3,17 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>실시간 티쳐블머신 인사말 웹앱</title>
+  <title>MediaPipe Hand Energy &amp; Pop-up Effect</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --card-border: #334155;
-      --text: #f8fafc;
-      --muted: #94a3b8;
+      --bg: #0b0f19;
+      --panel: rgba(17, 24, 39, 0.78);
+      --border: rgba(255, 255, 255, 0.14);
+      --text: #f9fafb;
+      --muted: #9ca3af;
       --accent: #38bdf8;
-      --accent-2: #34d399;
-      --warn: #fbbf24;
+      --accent-2: #a855f7;
     }
 
     * {
@@ -23,569 +22,691 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-      background: linear-gradient(135deg, #0b1120 0%, #111827 100%);
+      background: var(--bg);
       color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
       min-height: 100vh;
-      padding: 24px;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
-    }
-
-    .app {
-      width: 100%;
-      max-width: 920px;
-      background: rgba(30, 41, 59, 0.85);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(12px);
+      justify-content: center;
+      padding: 16px;
+      gap: 14px;
     }
 
     .header {
+      width: 100%;
+      max-width: 960px;
       display: flex;
       flex-wrap: wrap;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       gap: 12px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--card-border);
-    }
-
-    .header h1 {
-      font-size: 1.35rem;
-      font-weight: 700;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.85rem;
-      background: rgba(56, 189, 248, 0.14);
-      color: var(--accent);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 24px;
-    }
-
-    @media (max-width: 760px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .cam-box {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .webcam-wrapper {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      background: #090d16;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
       border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid var(--card-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 12px 18px;
     }
 
-    #webcam-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-      display: block;
-    }
-
-    .greeting-banner {
-      min-height: 92px;
-      border-radius: 16px;
-      padding: 18px 20px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid var(--card-border);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 6px;
-      transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
-    }
-
-    .greeting-banner.active-me {
-      border-color: var(--accent-2);
-      background: rgba(16, 185, 129, 0.12);
-    }
-
-    .greeting-banner.active-friend {
-      border-color: var(--accent);
-      background: rgba(56, 189, 248, 0.12);
-    }
-
-    .greeting-banner.active-bg {
-      border-color: #475569;
-      background: rgba(30, 41, 59, 0.65);
-    }
-
-    .greeting-tag {
-      font-size: 0.8rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      color: var(--muted);
-    }
-
-    .greeting-text {
-      font-size: 1.25rem;
+    .title-group h1 {
+      font-size: 1.05rem;
       font-weight: 700;
-      line-height: 1.4;
+      letter-spacing: -0.01em;
     }
 
-    .panel {
-      background: rgba(15, 23, 42, 0.72);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .panel h2 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .prob-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .prob-item {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .prob-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.92rem;
-    }
-
-    .prob-label {
-      font-weight: 600;
-    }
-
-    .prob-value {
-      font-variant-numeric: tabular-nums;
+    .title-group p {
+      font-size: 0.82rem;
       color: var(--muted);
+      margin-top: 2px;
     }
 
-    .bar-track {
-      width: 100%;
-      height: 12px;
-      background: #1e293b;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid rgba(148, 163, 184, 0.15);
-    }
-
-    .bar-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-      transition: width 0.1s linear;
-    }
-
-    .settings-box {
-      border-top: 1px solid var(--card-border);
-      padding-top: 14px;
+    .controls {
       display: flex;
-      flex-direction: column;
-      gap: 12px;
-      font-size: 0.86rem;
-      color: var(--muted);
-    }
-
-    .control-row {
-      display: flex;
-      justify-content: space-between;
       align-items: center;
       gap: 10px;
     }
 
-    .control-row input[type="range"] {
-      width: 120px;
-      accent-color: var(--accent);
-    }
-
-    .btn {
-      padding: 8px 14px;
+    button {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      border: none;
       border-radius: 10px;
-      border: 1px solid var(--card-border);
-      background: #1e293b;
-      color: var(--text);
+      padding: 9px 15px;
       font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
     }
 
-    .btn:hover {
-      background: #283548;
+    button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
     }
 
-    .log-text {
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .stage-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 16 / 9;
+      background: #05070d;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    video {
+      display: none;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 14px 14px auto 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      gap: 12px;
+    }
+
+    .badge {
+      background: rgba(11, 15, 25, 0.72);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 8px 12px;
       font-size: 0.8rem;
-      color: var(--muted);
-      line-height: 1.45;
+      line-height: 1.4;
     }
 
-    .error-msg {
-      color: #f87171;
-      font-size: 0.9rem;
-      padding: 12px;
-      text-align: center;
+    .badge strong {
+      color: var(--accent);
+    }
+
+    .charge-meter {
+      width: 180px;
+      background: rgba(11, 15, 25, 0.72);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+
+    .charge-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .charge-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .charge-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #818cf8, #f472b6);
+      border-radius: 999px;
+      transition: width 0.08s linear;
+    }
+
+    .status-banner {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(11, 15, 25, 0.78);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      padding: 7px 16px;
+      font-size: 0.82rem;
+      color: #e5e7eb;
+      pointer-events: none;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <h1>실시간 얼굴/상황 인식 인사말</h1>
-      <div class="status-pill" id="system-status">
-        <span class="dot"></span>
-        <span>모델 및 웹캠 초기화 중...</span>
-      </div>
+  <div class="header">
+    <div class="title-group">
+      <h1>Hand Energy Orb &amp; Pop-up Canvas</h1>
+      <p>1) 손바닥 펴기 → 2) 주먹/손 오므려 에너지 충전 → 3) 다시 펴서(보자기) 물체·동물 소환!</p>
     </div>
-
-    <div class="grid">
-      <div class="cam-box">
-        <div class="webcam-wrapper" id="webcam-container">
-          <div class="log-text" id="cam-placeholder">웹캠 권한을 허용해 주세요...</div>
-        </div>
-
-        <div class="greeting-banner active-bg" id="greeting-banner">
-          <div class="greeting-tag" id="greeting-tag">확정 상태: 대기 중</div>
-          <div class="greeting-text" id="greeting-text">사람을 기다리는 중입니다.</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>실시간 인식 확률</h2>
-        <div class="prob-list" id="prob-list"></div>
-
-        <div class="settings-box">
-          <div class="control-row">
-            <label for="threshold-input">확신도 임계값: <strong id="threshold-val">75%</strong></label>
-            <input id="threshold-input" type="range" min="50" max="95" step="5" value="75" />
-          </div>
-
-          <div class="control-row">
-            <label for="frames-input">연속 프레임 수: <strong id="frames-val">6</strong>프레임</label>
-            <input id="frames-input" type="range" min="2" max="15" step="1" value="6" />
-          </div>
-
-          <div class="control-row">
-            <button class="btn" id="test-voice-btn" type="button">한국어 음성 테스트</button>
-            <span id="speech-state">음성 대기</span>
-          </div>
-
-          <div class="log-text" id="debug-info">
-            후보 프레임: 0 / 6 · 마지막 음성: 없음
-          </div>
-        </div>
-      </div>
+    <div class="controls">
+      <button id="toggleSkeletonBtn" type="button">랜드마크 표시: ON</button>
+      <button id="restartBtn" type="button">카메라 재시작</button>
     </div>
   </div>
 
-  <!-- TensorFlow.js & Teachable Machine Image 라이브러리 -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <div class="stage-wrapper">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="outputCanvas"></canvas>
 
-  <script>
-    // 티쳐블머신 모델 URL (필요시 변경 가능)
-    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/I54hIZYkuf/";
+    <div class="hud">
+      <div class="badge">
+        <div>손 상태: <strong id="handPoseText">대기 중</strong></div>
+        <div>시퀀스: <strong id="phaseText">1. 손을 쫙 펴주세요</strong></div>
+      </div>
 
-    // 상태 상수
-    const STATE_NONE = "NONE";
-    const STATE_ME = "ME";         // [나]
-    const STATE_FRIEND = "FRIEND"; // [친구] 또는 [안녕하세요]
-    const STATE_BG = "BG";         // [배경]
+      <div class="charge-meter">
+        <div class="charge-label">
+          <span>에너지 충전</span>
+          <span id="chargePercent">0%</span>
+        </div>
+        <div class="charge-track">
+          <div class="charge-fill" id="chargeFill"></div>
+        </div>
+      </div>
+    </div>
 
-    let model = null;
-    let webcam = null;
-    let maxPredictions = 0;
+    <div class="status-banner" id="statusBanner">MediaPipe 손 추적 모델을 불러오는 중입니다...</div>
+  </div>
 
-    // 흔들림 방지를 위한 연속 프레임 추적 상태
-    let confidenceThreshold = 0.75;
-    let requiredConsecutiveFrames = 6;
-    let candidateState = STATE_NONE;
-    let consecutiveCount = 0;
-    let confirmedState = STATE_NONE;
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
-    const probBarEls = new Map();
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
 
-    const statusEl = document.getElementById("system-status");
-    const camContainerEl = document.getElementById("webcam-container");
-    const camPlaceholderEl = document.getElementById("cam-placeholder");
-    const probListEl = document.getElementById("prob-list");
-    const greetingBannerEl = document.getElementById("greeting-banner");
-    const greetingTagEl = document.getElementById("greeting-tag");
-    const greetingTextEl = document.getElementById("greeting-text");
-    const thresholdInput = document.getElementById("threshold-input");
-    const thresholdVal = document.getElementById("threshold-val");
-    const framesInput = document.getElementById("frames-input");
-    const framesVal = document.getElementById("frames-val");
-    const testVoiceBtn = document.getElementById("test-voice-btn");
-    const speechStateEl = document.getElementById("speech-state");
-    const debugInfoEl = document.getElementById("debug-info");
+    const handPoseText = document.getElementById("handPoseText");
+    const phaseText = document.getElementById("phaseText");
+    const chargePercent = document.getElementById("chargePercent");
+    const chargeFill = document.getElementById("chargeFill");
+    const statusBanner = document.getElementById("statusBanner");
+    const toggleSkeletonBtn = document.getElementById("toggleSkeletonBtn");
+    const restartBtn = document.getElementById("restartBtn");
 
-    thresholdInput.addEventListener("input", () => {
-      confidenceThreshold = Number(thresholdInput.value) / 100;
-      thresholdVal.textContent = `${thresholdInput.value}%`;
-    });
+    const SPAWN_ITEMS = [
+      { emoji: "🦊", label: "여우" },
+      { emoji: "🐼", label: "판다" },
+      { emoji: "🦄", label: "유니콘" },
+      { emoji: "🐙", label: "문어" },
+      { emoji: "🦖", label: "공룡" },
+      { emoji: "🦋", label: "나비" },
+      { emoji: "🚀", label: "로켓" },
+      { emoji: "🍕", label: "피자" },
+      { emoji: "💎", label: "다이아몬드" },
+      { emoji: "🌈", label: "무지개" },
+      { emoji: "🎸", label: "기타" },
+      { emoji: " crown".trim(), label: "왕관" }
+    ];
+    SPAWN_ITEMS[SPAWN_ITEMS.length - 1].emoji = "👑";
 
-    framesInput.addEventListener("input", () => {
-      requiredConsecutiveFrames = Number(framesInput.value);
-      framesVal.textContent = framesInput.value;
-      consecutiveCount = 0;
-    });
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
 
-    testVoiceBtn.addEventListener("click", () => {
-      speakKorean("한국어 음성 출력이 정상 작동합니다.");
-    });
+    let handLandmarker = null;
+    let stream = null;
+    let showSkeleton = true;
+    let lastVideoTime = -1;
+    let lastFrameTime = performance.now();
 
-    // 레이블 문자열을 표준 상태로 매핑
-    function mapLabelToState(rawLabel) {
-      const normalized = (rawLabel || "").replace(/[\[\]\s]/g, "").toLowerCase();
-      if (normalized === "나" || normalized === "me") return STATE_ME;
-      if (normalized === "친구" || normalized === "friend" || normalized === "안녕하세요") return STATE_FRIEND;
-      if (normalized === "배경" || normalized === "background" || normalized === "bg") return STATE_BG;
-      return STATE_NONE;
+    // 손 제스처 및 에너지 상태 머신
+    // "NEED_OPEN" -> "CHARGING" -> "READY_TO_POP"
+    let sequenceState = "NEED_OPEN";
+    let charge = 0; // 0 ~ 100
+    let lastPalmPos = null; // 캔버스 좌표계 { x, y, scale }
+
+    // 소환된 물체/동물 및 파티클 배열
+    const spawnedEntities = [];
+    const particles = [];
+
+    function setBanner(msg) {
+      statusBanner.textContent = msg;
     }
 
-    // 확률 막대그래프 UI 초기화
-    function initProbabilityBars(classLabels) {
-      probListEl.innerHTML = "";
-      probBarEls.clear();
+    function dist2D(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
 
-      classLabels.forEach((label) => {
-        const item = document.createElement("div");
-        item.className = "prob-item";
+    /**
+     * 정규화 랜드마크(0~1)를 기반으로 손이 펴졌는지 / 오므렸는지 판별
+     * 손목(0)에서 중지 MCP(9)까지의 길이를 기준 스케일로 사용해 카메라 거리 변화에 강건하게 계산
+     */
+    function classifyHandPose(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmSize = Math.max(dist2D(wrist, middleMcp), 0.04);
 
-        const meta = document.createElement("div");
-        meta.className = "prob-meta";
+      const tips = [4, 8, 12, 16, 20];
+      const pips = [3, 6, 10, 14, 18];
 
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "prob-label";
-        nameSpan.textContent = label;
+      let extendedCount = 0;
+      let avgTipDistRatio = 0;
 
-        const valSpan = document.createElement("span");
-        valSpan.className = "prob-value";
-        valSpan.textContent = "0.0%";
+      for (let i = 0; i < tips.length; i++) {
+        const tip = landmarks[tips[i]];
+        const pip = landmarks[pips[i]];
+        const tipToWrist = dist2D(tip, wrist) / palmSize;
+        const pipToWrist = dist2D(pip, wrist) / palmSize;
 
-        const track = document.createElement("div");
-        track.className = "bar-track";
+        avgTipDistRatio += tipToWrist;
 
-        const fill = document.createElement("div");
-        fill.className = "bar-fill";
+        if (i === 0) {
+          // 엄지는 검지 MCP(5)와의 거리로 펴짐 판별
+          const thumbSpread = dist2D(tip, landmarks[5]) / palmSize;
+          if (thumbSpread > 0.62 && tipToWrist > pipToWrist * 1.05) {
+            extendedCount++;
+          }
+        } else {
+          if (tipToWrist > pipToWrist * 1.12 && tipToWrist > 1.35) {
+            extendedCount++;
+          }
+        }
+      }
 
-        track.appendChild(fill);
-        meta.appendChild(nameSpan);
-        meta.appendChild(valSpan);
-        item.appendChild(meta);
-        item.appendChild(track);
-        probListEl.appendChild(item);
+      avgTipDistRatio /= tips.length;
 
-        probBarEls.set(label, { valSpan, fill });
+      if (extendedCount >= 4 && avgTipDistRatio > 1.45) {
+        return "OPEN";
+      }
+      if (extendedCount <= 1 && avgTipDistRatio < 1.15) {
+        return "CLOSED";
+      }
+      return "PARTIAL";
+    }
+
+    function getPalmCenterCanvas(landmarks) {
+      // 손목(0), 검지 MCP(5), 중지 MCP(9), 약지 MCP(13), 소지 MCP(17)의 중심
+      const indices = [0, 5, 9, 13, 17];
+      let nx = 0;
+      let ny = 0;
+      for (const idx of indices) {
+        nx += landmarks[idx].x;
+        ny += landmarks[idx].y;
+      }
+      nx /= indices.length;
+      ny /= indices.length;
+
+      // 전면 카메라 좌우 반전(mirror) 매핑
+      const x = (1 - nx) * canvas.width;
+      const y = ny * canvas.height;
+      const palmPx = Math.max(dist2D(landmarks[0], landmarks[9]) * canvas.width, 45);
+
+      return { x, y, palmPx };
+    }
+
+    function spawnBurst(x, y, chargeRatio) {
+      const item = SPAWN_ITEMS[Math.floor(Math.random() * SPAWN_ITEMS.length)];
+      const baseSize = 58 + chargeRatio * 56; // 충전량에 따라 크기 변화
+
+      spawnedEntities.push({
+        emoji: item.emoji,
+        label: item.label,
+        x,
+        y: y - 24,
+        vy: -260 - chargeRatio * 140,
+        vx: (Math.random() - 0.5) * 90,
+        targetY: y - 95 - chargeRatio * 45,
+        scale: 0.15,
+        targetScale: baseSize / 64,
+        rotation: (Math.random() - 0.5) * 0.25,
+        rotVel: (Math.random() - 0.5) * 1.8,
+        age: 0,
+        maxAge: 2.8,
+        floatPhase: Math.random() * Math.PI * 2
+      });
+
+      const particleCount = Math.round(18 + chargeRatio * 28);
+      const palette = ["#38bdf8", "#a855f7", "#f472b6", "#facc15", "#34d399"];
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3;
+        const speed = 90 + Math.random() * (180 + chargeRatio * 160);
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 50,
+          radius: 3 + Math.random() * 5,
+          color: palette[i % palette.length],
+          alpha: 1,
+          life: 0,
+          maxLife: 0.55 + Math.random() * 0.45
+        });
+      }
+    }
+
+    function updateSequence(pose, palmPos, dt) {
+      if (pose === "OPEN") {
+        handPoseText.textContent = "편 손 (보자기)";
+      } else if (pose === "CLOSED") {
+        handPoseText.textContent = "오므린 손 (충전)";
+      } else {
+        handPoseText.textContent = "중간 손 모양";
+      }
+
+      if (sequenceState === "NEED_OPEN") {
+        phaseText.textContent = "1. 손을 쫙 펴주세요";
+        charge = Math.max(0, charge - dt * 40);
+        if (pose === "OPEN") {
+          sequenceState = "CHARGING";
+          setBanner("손을 폈습니다! 이제 손을 오므려 에너지 구를 충전하세요.");
+        }
+      } else if (sequenceState === "CHARGING") {
+        if (pose === "CLOSED") {
+          charge = Math.min(100, charge + dt * 68);
+          phaseText.textContent = "2. 에너지 구 충전 중...";
+          if (charge >= 25) {
+            setBanner("에너지 충전 중! 다시 손을 펴면 물체·동물이 튀어나옵니다.");
+          }
+        } else if (pose === "OPEN" && charge >= 25) {
+          // 충전 후 다시 손을 펴면 소환!
+          const ratio = charge / 100;
+          const spawnPos = palmPos || lastPalmPos || { x: canvas.width * 0.5, y: canvas.height * 0.5 };
+          spawnBurst(spawnPos.x, spawnPos.y, ratio);
+          setBanner(`✨ ${SPAWN_ITEMS[spawnedEntities[spawnedEntities.length - 1].emoji ? 0 : 0]?.label || "아이템"} 소환! 다시 펴서 오므리면 재충전됩니다.`);
+          const latest = spawnedEntities[spawnedEntities.length - 1];
+          if (latest) {
+            setBanner(`✨ ${latest.label} (${latest.emoji}) 소환 완료! (충전량 ${Math.round(charge)}%)`);
+          }
+          charge = 0;
+          sequenceState = "CHARGING";
+        } else if (pose === "OPEN" && charge < 25) {
+          phaseText.textContent = "2. 손을 오므려 충전하세요";
+        } else {
+          // 중간 모양일 때는 살짝만 감소
+          charge = Math.max(0, charge - dt * 12);
+        }
+      }
+
+      const pct = Math.round(charge);
+      chargePercent.textContent = `${pct}%`;
+      chargeFill.style.width = `${pct}%`;
+    }
+
+    function drawEnergyOrb(palmPos, chargeAmount, nowSec) {
+      if (!palmPos || chargeAmount <= 1) return;
+
+      const ratio = chargeAmount / 100;
+      const pulse = 1 + Math.sin(nowSec * 12) * 0.08;
+      const radius = (14 + ratio * Math.min(palmPos.palmPx * 0.65, 88)) * pulse;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // 외곽 글로우
+      const outerGrad = ctx.createRadialGradient(
+        palmPos.x, palmPos.y, radius * 0.1,
+        palmPos.x, palmPos.y, radius * 1.65
+      );
+      outerGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+      outerGrad.addColorStop(0.25, "rgba(56, 189, 248, 0.78)");
+      outerGrad.addColorStop(0.65, "rgba(168, 85, 247, 0.35)");
+      outerGrad.addColorStop(1, "rgba(168, 85, 247, 0)");
+
+      ctx.fillStyle = outerGrad;
+      ctx.beginPath();
+      ctx.arc(palmPos.x, palmPos.y, radius * 1.65, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 회전하는 에너지 링
+      ctx.strokeStyle = `rgba(125, 211, 252, ${0.4 + ratio * 0.5})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(palmPos.x, palmPos.y, radius * 1.15, nowSec * 4, nowSec * 4 + Math.PI * 1.35);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawHandLandmarks(landmarks) {
+      if (!showSkeleton) return;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.75)";
+      ctx.lineWidth = 2.5;
+
+      for (const [startIdx, endIdx] of HAND_CONNECTIONS) {
+        const a = landmarks[startIdx];
+        const b = landmarks[endIdx];
+        ctx.beginPath();
+        ctx.moveTo((1 - a.x) * canvas.width, a.y * canvas.height);
+        ctx.lineTo((1 - b.x) * canvas.width, b.y * canvas.height);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        const x = (1 - lm.x) * canvas.width;
+        const y = lm.y * canvas.height;
+        const isTip = [4, 8, 12, 16, 20].includes(i);
+
+        ctx.fillStyle = isTip ? "#f472b6" : "#f8fafc";
+        ctx.beginPath();
+        ctx.arc(x, y, isTip ? 5.5 : 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function updateAndDrawEffects(dt, nowSec) {
+      // 파티클 업데이트 & 렌더
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) {
+          particles.splice(i, 1);
+          continue;
+        }
+        p.vy += 280 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.alpha = 1 - p.life / p.maxLife;
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 랜덤 물체 / 동물 애니메이션 업데이트 & 렌더
+      for (let i = spawnedEntities.length - 1; i >= 0; i--) {
+        const ent = spawnedEntities[i];
+        ent.age += dt;
+        if (ent.age >= ent.maxAge) {
+          spawnedEntities.splice(i, 1);
+          continue;
+        }
+
+        // 스프링 상승 후 부드럽게 부유
+        if (ent.age < 0.55) {
+          ent.vy += 720 * dt;
+          ent.y += ent.vy * dt;
+          ent.x += ent.vx * dt;
+          ent.scale += (ent.targetScale - ent.scale) * Math.min(1, dt * 14);
+          ent.rotation += ent.rotVel * dt;
+        } else {
+          ent.y += Math.sin(nowSec * 3.5 + ent.floatPhase) * 14 * dt;
+          ent.rotation = Math.sin(nowSec * 2.5 + ent.floatPhase) * 0.14;
+        }
+
+        const fadeOutStart = ent.maxAge - 0.65;
+        const alpha = ent.age > fadeOutStart
+          ? Math.max(0, (ent.maxAge - ent.age) / 0.65)
+          : 1;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(ent.x, ent.y);
+        ctx.rotate(ent.rotation);
+        ctx.scale(ent.scale, ent.scale);
+
+        // 뒤쪽 후광
+        const glow = ctx.createRadialGradient(0, 0, 6, 0, 0, 56);
+        glow.addColorStop(0, "rgba(250, 204, 21, 0.35)");
+        glow.addColorStop(1, "rgba(250, 204, 21, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, 56, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = "64px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(ent.emoji, 0, 0);
+
+        ctx.restore();
+      }
+    }
+
+    function renderLoop(nowMs) {
+      const nowSec = nowMs * 0.001;
+      const dt = Math.min(0.05, Math.max(0.001, (nowMs - lastFrameTime) * 0.001));
+      lastFrameTime = nowMs;
+
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (video.readyState >= 2 && canvas.width > 0 && canvas.height > 0) {
+        // 전면 카메라 좌우 반전 비디오 그리기
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        if (handLandmarker && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          const results = handLandmarker.detectForVideo(video, nowMs);
+
+          if (results.landmarks && results.landmarks.length > 0) {
+            // 가장 큰 손(첫 번째 검출 손) 기준 제스처 및 에너지 구 처리
+            const primaryLandmarks = results.landmarks[0];
+            const pose = classifyHandPose(primaryLandmarks);
+            const palmPos = getPalmCenterCanvas(primaryLandmarks);
+            lastPalmPos = palmPos;
+
+            updateSequence(pose, palmPos, dt);
+
+            for (const lm of results.landmarks) {
+              drawHandLandmarks(lm);
+            }
+
+            if (sequenceState === "CHARGING" || charge > 1) {
+              drawEnergyOrb(palmPos, charge, nowSec);
+            }
+          } else {
+            handPoseText.textContent = "손 미검출";
+            charge = Math.max(0, charge - dt * 25);
+            chargePercent.textContent = `${Math.round(charge)}%`;
+            chargeFill.style.width = `${Math.round(charge)}%`;
+          }
+        }
+      }
+
+      updateAndDrawEffects(dt, nowSec);
+      requestAnimationFrame(renderLoop);
+    }
+
+    async function initMediaPipe() {
+      setBanner("MediaPipe Vision WASM 및 손 인식 모델 초기화 중...");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55
       });
     }
 
-    // 확률 막대그래프 업데이트
-    function updateProbabilityBars(predictions) {
-      for (const pred of predictions) {
-        const target = probBarEls.get(pred.className);
-        if (!target) continue;
-        const pct = (pred.probability * 100).toFixed(1);
-        target.valSpan.textContent = `${pct}%`;
-        target.fill.style.width = `${Math.min(100, Math.max(0, pred.probability * 100))}%`;
-      }
-    }
-
-    // 한국어 음성(Web Speech API) 출력
-    function speakKorean(text) {
-      if (!("speechSynthesis" in window)) {
-        speechStateEl.textContent = "음성 미지원 브라우저";
-        return;
+    async function startCamera() {
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
       }
 
+      setBanner("전면 카메라 권한을 요청하는 중...");
       try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "ko-KR";
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
 
-        const voices = window.speechSynthesis.getVoices();
-        const koVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko"));
-        if (koVoice) {
-          utterance.voice = koVoice;
-        }
-
-        utterance.onstart = () => {
-          speechStateEl.textContent = "말하는 중...";
-        };
-        utterance.onend = () => {
-          speechStateEl.textContent = "음성 대기";
-        };
-        utterance.onerror = () => {
-          speechStateEl.textContent = "음성 재생 확인 필요";
-        };
-
-        window.speechSynthesis.speak(utterance);
-        debugInfoEl.textContent = `후보 프레임: ${consecutiveCount} / ${requiredConsecutiveFrames} · 마지막 음성: "${text}"`;
-      } catch (err) {
-        speechStateEl.textContent = "음성 오류";
-      }
-    }
-
-    // 확정된 상태에 따른 화면 및 음성 처리 (상태가 바뀔 때만 1회 실행)
-    function applyConfirmedState(newState) {
-      const prevState = confirmedState;
-      confirmedState = newState;
-
-      greetingBannerEl.classList.remove("active-me", "active-friend", "active-bg");
-
-      if (newState === STATE_ME) {
-        const message = "환영합니다! 오늘도 좋은 하루 보내세요.";
-        greetingBannerEl.classList.add("active-me");
-        greetingTagEl.textContent = "확정 상태: [나]";
-        greetingTextEl.textContent = message;
-
-        if (prevState !== STATE_ME) {
-          speakKorean(message);
-        }
-      } else if (newState === STATE_FRIEND) {
-        const message = "안녕하세요? 용건을 말해주세요";
-        greetingBannerEl.classList.add("active-friend");
-        greetingTagEl.textContent = "확정 상태: [친구 / 안녕하세요]";
-        greetingTextEl.textContent = message;
-
-        if (prevState !== STATE_FRIEND) {
-          speakKorean(message);
-        }
-      } else if (newState === STATE_BG) {
-        greetingBannerEl.classList.add("active-bg");
-        greetingTagEl.textContent = "확정 상태: [배경]";
-        greetingTextEl.textContent = "사람이 없습니다. (인사말 없음)";
-      }
-    }
-
-    // 프레임별 예측 처리 및 연속 프레임 안정화
-    async function predictFrame() {
-      if (!model || !webcam) return;
-
-      const prediction = await model.predict(webcam.canvas);
-      updateProbabilityBars(prediction);
-
-      // 가장 높은 확률의 클래스 찾기
-      let topPred = prediction[0];
-      for (const p of prediction) {
-        if (p.probability > topPred.probability) {
-          topPred = p;
-        }
-      }
-
-      const mapped = topPred && topPred.probability >= confidenceThreshold
-        ? mapLabelToState(topPred.className)
-        : STATE_NONE;
-
-      if (mapped !== STATE_NONE && mapped === candidateState) {
-        consecutiveCount += 1;
-      } else if (mapped !== STATE_NONE) {
-        candidateState = mapped;
-        consecutiveCount = 1;
-      } else {
-        candidateState = STATE_NONE;
-        consecutiveCount = 0;
-      }
-
-      if (consecutiveCount >= requiredConsecutiveFrames && candidateState !== STATE_NONE) {
-        applyConfirmedState(candidateState);
-      }
-
-      debugInfoEl.textContent =
-        `후보 프레임: ${consecutiveCount} / ${requiredConsecutiveFrames} (${topPred ? topPred.className : "-"} ${topPred ? (topPred.probability * 100).toFixed(0) : 0}%)`;
-    }
-
-    async function loop() {
-      webcam.update();
-      await predictFrame();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function init() {
-      try {
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.getVoices();
-        }
-
-        const modelURL = MODEL_URL.endsWith("/") ? MODEL_URL + "model.json" : MODEL_URL + "/model.json";
-        const metadataURL = MODEL_URL.endsWith("/") ? MODEL_URL + "metadata.json" : MODEL_URL + "/metadata.json";
-
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
-
-        const labels = model.getClassLabels ? model.getClassLabels() : ["나", "안녕하세요", "배경"];
-        initProbabilityBars(labels);
-
-        const flip = true; // 전면 카메라 좌우 반전
-        webcam = new tmImage.Webcam(480, 360, flip);
-        await webcam.setup();
-        await webcam.play();
-
-        camPlaceholderEl?.remove();
-        camContainerEl.innerHTML = "";
-        camContainerEl.appendChild(webcam.canvas);
-
-        statusEl.innerHTML = '<span class="dot"></span><span>실시간 인식 실행 중</span>';
-        window.requestAnimationFrame(loop);
+        sequenceState = "NEED_OPEN";
+        charge = 0;
+        chargePercent.textContent = "0%";
+        chargeFill.style.width = "0%";
+        setBanner("준비 완료! 먼저 손을 완전히 편 뒤 오므려 에너지를 충전하세요.");
       } catch (err) {
         console.error(err);
-        statusEl.textContent = "초기화 오류";
-        camContainerEl.innerHTML =
-          `<div class="error-msg">웹캠 또는 모델을 불러오지 못했습니다.<br/>카메라 권한 및 HTTPS/로컬 서버 환경을 확인해 주세요.<br/>(${err.message || err})</div>`;
+        setBanner("카메라 접근에 실패했습니다. HTTPS 또는 localhost 환경과 권한을 확인해 주세요.");
       }
     }
 
-    window.addEventListener("DOMContentLoaded", init);
+    toggleSkeletonBtn.addEventListener("click", () => {
+      showSkeleton = !showSkeleton;
+      toggleSkeletonBtn.textContent = `랜드마크 표시: ${showSkeleton ? "ON" : "OFF"}`;
+    });
+
+    restartBtn.addEventListener("click", async () => {
+      restartBtn.disabled = true;
+      await startCamera();
+      restartBtn.disabled = false;
+    });
+
+    (async () => {
+      try {
+        await initMediaPipe();
+        await startCamera();
+        requestAnimationFrame(renderLoop);
+      } catch (err) {
+        console.error(err);
+        setBanner("초기화 중 오류가 발생했습니다. 네트워크 상태를 확인해 주세요.");
+      }
+    })();
   </script>
 </body>
 </html>
