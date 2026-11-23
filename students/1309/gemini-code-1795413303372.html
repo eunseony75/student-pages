@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>손바닥 쿠미귀신 소환 애니메이션 (MediaPipe Tasks-Vision)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #090714;
+      --panel-bg: rgba(18, 13, 36, 0.72);
+      --border-glow: rgba(188, 120, 255, 0.35);
+      --accent-purple: #b46cff;
+      --accent-cyan: #5ce1e6;
+      --accent-pink: #ff6ec7;
+      --text-main: #f6f2ff;
+      --text-sub: #b8aed6;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 35%, #1c1038 0%, #0b0817 65%, #05030b 100%);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 전면 카메라 비디오는 숨기고 캔버스에서 미러링 + 이펙트를 합성 */
+    #webcam {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #output-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 상단 HUD */
+    .hud-top {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .badge-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .pill {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-glow);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #ffcf5c;
+      box-shadow: 0 0 10px #ffcf5c;
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+
+    .dot.ready {
+      background: #4ef2b0;
+      box-shadow: 0 0 10px #4ef2b0;
+    }
+
+    .dot.charged {
+      background: var(--accent-pink);
+      box-shadow: 0 0 14px var(--accent-pink);
+    }
+
+    .dot.summoned {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 14px var(--accent-cyan);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, rgba(180, 108, 255, 0.28), rgba(92, 225, 230, 0.22));
+      color: var(--text-main);
+      border: 1px solid rgba(215, 175, 255, 0.5);
+      border-radius: 999px;
+      padding: 8px 15px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent-cyan);
+      background: linear-gradient(135deg, rgba(180, 108, 255, 0.42), rgba(92, 225, 230, 0.34));
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    /* 하단 가이드 배너 */
+    .hud-bottom {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      width: min(92vw, 760px);
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glow);
+      border-radius: 18px;
+      padding: 12px 18px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+      text-align: center;
+    }
+
+    .step-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+    }
+
+    .step-chip {
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.25s ease;
+    }
+
+    .step-chip.active {
+      color: #fff;
+      background: rgba(180, 108, 255, 0.28);
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 14px rgba(180, 108, 255, 0.35);
+    }
+
+    .step-chip.done {
+      color: #8dfce1;
+      background: rgba(78, 242, 176, 0.14);
+      border-color: rgba(78, 242, 176, 0.4);
+    }
+
+    .guide-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* 로딩 / 권한 오버레이 */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      text-align: center;
+      background: rgba(8, 6, 18, 0.86);
+      backdrop-filter: blur(10px);
+      transition: opacity 0.35s ease;
+    }
+
+    #overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(180, 108, 255, 0.22);
+      border-top-color: var(--accent-cyan);
+      border-right-color: var(--accent-pink);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #overlay h1 {
+      font-size: clamp(20px, 4vw, 28px);
+      font-weight: 800;
+      background: linear-gradient(90deg, #ffffff, #d9a7ff, #7ef9ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    #overlay p {
+      max-width: 460px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-sub);
+    }
+
+    .retry-btn {
+      margin-top: 4px;
+      padding: 10px 20px;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <video id="webcam" playsinline autoplay muted></video>
+    <canvas id="output-canvas"></canvas>
+
+    <div class="hud-top">
+      <div class="badge-group">
+        <div class="pill">
+          <span id="status-dot" class="dot"></span>
+          <span id="status-text">모델 로딩 중...</span>
+        </div>
+        <div class="pill">
+          <span>손 상태: <strong id="hand-state-label">미검출</strong></span>
+          <span style="opacity:0.5;">|</span>
+          <span>개방도: <strong id="openness-value">0%</strong></span>
+        </div>
+      </div>
+
+      <div class="badge-group">
+        <button id="toggle-skeleton-btn" class="btn" type="button">랜드마크 표시: ON</button>
+        <button id="replay-btn" class="btn" type="button">테스트 소환</button>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="step-row">
+        <span id="chip-1" class="step-chip">1. 손을 완전히 펴기 (보)</span>
+        <span>→</span>
+        <span id="chip-2" class="step-chip">2. 다시 오므리기 (임팩트 응축)</span>
+        <span>→</span>
+        <span id="chip-3" class="step-chip">3. 다시 펴기 (보자기 쿠미귀신 출현!)</span>
+      </div>
+      <div id="guide-text" class="guide-text">카메라를 허용하고 손을 화면에 보여주세요.</div>
+    </div>
+
+    <div id="overlay">
+      <div id="spinner" class="spinner"></div>
+      <h1>손바닥 쿠미귀신 소환 스튜디오</h1>
+      <p id="overlay-desc">
+        전면 카메라와 <strong>MediaPipe Tasks-Vision (HandLandmarker)</strong>을 초기화하고 있습니다.<br />
+        손을 폈다가 오므린 뒤 다시 펴면 손바닥 보자기 위로 쿠미귀신이 등장합니다!
+      </p>
+      <button id="retry-btn" class="btn retry-btn" type="button">카메라 다시 시도</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      HandLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+
+    // DOM 요소
+    const videoEl = document.getElementById("webcam");
+    const canvasEl = document.getElementById("output-canvas");
+    const ctx = canvasEl.getContext("2d");
+
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+    const handStateLabel = document.getElementById("hand-state-label");
+    const opennessValueEl = document.getElementById("openness-value");
+    const guideTextEl = document.getElementById("guide-text");
+
+    const chip1 = document.getElementById("chip-1");
+    const chip2 = document.getElementById("chip-2");
+    const chip3 = document.getElementById("chip-3");
+
+    const overlayEl = document.getElementById("overlay");
+    const spinnerEl = document.getElementById("spinner");
+    const overlayDescEl = document.getElementById("overlay-desc");
+    const retryBtn = document.getElementById("retry-btn");
+    const toggleSkeletonBtn = document.getElementById("toggle-skeleton-btn");
+    const replayBtn = document.getElementById("replay-btn");
+
+    // 손 랜드마크 연결선 (MediaPipe Hand 21 landmarks)
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],       // 엄지
+      [0, 5], [5, 6], [6, 7], [7, 8],       // 검지
+      [5, 9], [9, 10], [10, 11], [11, 12],  // 중지
+      [9, 13], [13, 14], [14, 15], [15, 16],// 약지
+      [13, 17], [17, 18], [18, 19], [19, 20],// 소지
+      [0, 17]
+    ];
+
+    let handLandmarker = null;
+    let showSkeleton = true;
+    let lastVideoTime = -1;
+    let animationFrameId = null;
+
+    // 제스처 시퀀스 상태 머신
+    // IDLE -> OPEN_READY (1단계: 손을 완전히 폄) -> CLOSED_CHARGED (2단계: 다시 오므려 임팩트 응축) -> SUMMONED (3단계: 다시 펴서 보자기 쿠미귀신 출현)
+    const SEQUENCE = {
+      IDLE: "IDLE",
+      OPEN_READY: "OPEN_READY",
+      CLOSED_CHARGED: "CLOSED_CHARGED",
+      SUMMONED: "SUMMONED"
+    };
+
+    let seqState = SEQUENCE.IDLE;
+    let smoothedOpenness = 0; // 0.0 (주먹/오므림) ~ 1.0 (완전 펼침)
+    let lastHandCenter = null; // 캔버스 좌표 { x, y, scale }
+    let impactFlash = 0;      // 오므릴 때 임팩트 플래시 강도 (0 ~ 1)
+    let shakeTime = 0;        // 화면/손바닥 임팩트 흔들림 타이머
+
+    // 쿠미귀신 보자기 애니메이션 상태
+    const kumi = {
+      active: false,
+      progress: 0,      // 0 -> 1 등장 진행도
+      time: 0,          // 부유/표정 애니메이션 시간
+      x: 0,
+      y: 0,
+      scale: 1,
+      tilt: 0,
+      particles: [],
+      shockwaves: []
+    };
+
+    // 캔버스 리사이즈
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvasEl.width = Math.floor(window.innerWidth * dpr);
+      canvasEl.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    toggleSkeletonBtn.addEventListener("click", () => {
+      showSkeleton = !showSkeleton;
+      toggleSkeletonBtn.textContent = `랜드마크 표시: ${showSkeleton ? "ON" : "OFF"}`;
+    });
+
+    replayBtn.addEventListener("click", () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const cx = lastHandCenter ? lastHandCenter.x : w * 0.5;
+      const cy = lastHandCenter ? lastHandCenter.y : h * 0.52;
+      const sc = lastHandCenter ? lastHandCenter.scale : Math.min(w, h) * 0.24;
+      triggerImpactFlash(cx, cy, sc);
+      triggerKumiSummon(cx, cy, sc);
+      seqState = SEQUENCE.SUMMONED;
+      updateSequenceUI("주먹 오므림 → 보자기 펼침 (테스트 소환!)");
+    });
+
+    retryBtn.addEventListener("click", () => {
+      retryBtn.style.display = "none";
+      spinnerEl.style.display = "block";
+      overlayDescEl.innerHTML = "전면 카메라 권한을 다시 요청하고 있습니다...";
+      initCameraAndModel();
+    });
+
+    // 2점 거리
+    function dist2D(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    // 손 개방도(0~1) 계산: 손목(0)에서 중지 MCP(9)까지의 기준 길이 대비 4개 손가락 끝(8, 12, 16, 20) 거리 비율
+    function computeHandOpenness(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmRef = Math.max(dist2D(wrist, middleMcp), 0.04);
+
+      const tips = [4, 8, 12, 16, 20];
+      const weights = [0.14, 0.23, 0.23, 0.22, 0.18];
+
+      let weightedRatio = 0;
+      tips.forEach((tipIdx, i) => {
+        const d = dist2D(wrist, landmarks[tipIdx]);
+        // 펼쳤을 때 대략 palmRef * 1.85 이상, 오므렸을 때 palmRef * 0.85 이하
+        const norm = (d / palmRef - 0.88) / (1.82 - 0.88);
+        const clamped = Math.max(0, Math.min(1, norm));
+        weightedRatio += clamped * weights[i];
+      });
+
+      return weightedRatio;
+    }
+
+    // 손바닥 중심 및 크기(캔버스 픽셀 좌표, 전면 카메라 미러링 반영)
+    function getPalmTransform(landmarks) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      // 손목(0), 검지 MCP(5), 중지 MCP(9), 약지 MCP(13), 소지 MCP(17) 평균으로 손바닥 중심 계산
+      const palmIndices = [0, 5, 9, 13, 17];
+      let sumX = 0;
+      let sumY = 0;
+      for (const idx of palmIndices) {
+        // 전면 카메라 좌우 반전: (1 - lm.x) * w
+        sumX += (1 - landmarks[idx].x) * w;
+        sumY += landmarks[idx].y * h;
+      }
+
+      const cx = sumX / palmIndices.length;
+      const cy = sumY / palmIndices.length;
+
+      const p0 = { x: (1 - landmarks[0].x) * w, y: landmarks[0].y * h };
+      const p9 = { x: (1 - landmarks[9].x) * w, y: landmarks[9].y * h };
+      const palmSize = Math.hypot(p9.x - p0.x, p9.y - p0.y);
+      const scale = Math.max(70, Math.min(260, palmSize * 1.45));
+
+      // 손 기울기 각도
+      const angle = Math.atan2(p9.y - p0.y, p9.x - p0.x) + Math.PI / 2;
+
+      return { x: cx, y: cy, scale, angle };
+    }
+
+    function updateSequenceUI(message) {
+      guideTextEl.textContent = message;
+
+      chip1.classList.remove("active", "done");
+      chip2.classList.remove("active", "done");
+      chip3.classList.remove("active", "done");
+
+      if (seqState === SEQUENCE.IDLE) {
+        chip1.classList.add("active");
+        statusDot.className = "dot ready";
+        statusText.textContent = "손 인식 중 · 1단계 대기";
+      } else if (seqState === SEQUENCE.OPEN_READY) {
+        chip1.classList.add("done");
+        chip2.classList.add("active");
+        statusDot.className = "dot ready";
+        statusText.textContent = "손 펼침 확인 · 오므려 주세요";
+      } else if (seqState === SEQUENCE.CLOSED_CHARGED) {
+        chip1.classList.add("done");
+        chip2.classList.add("done");
+        chip3.classList.add("active");
+        statusDot.className = "dot charged";
+        statusText.textContent = "임팩트 응축 완료 · 다시 펴세요!";
+      } else if (seqState === SEQUENCE.SUMMONED) {
+        chip1.classList.add("done");
+        chip2.classList.add("done");
+        chip3.classList.add("active");
+        statusDot.className = "dot summoned";
+        statusText.textContent = "쿠미귀신 보자기 소환됨!";
+      }
+    }
+
+    function triggerImpactFlash(x, y, scale) {
+      impactFlash = 1.0;
+      shakeTime = 0.28;
+      kumi.shockwaves.push({
+        x,
+        y,
+        radius: scale * 0.2,
+        maxRadius: scale * 2.1,
+        alpha: 1,
+        color: "#ff6ec7"
+      });
+
+      for (let i = 0; i < 24; i++) {
+        const theta = (Math.PI * 2 * i) / 24 + (Math.random() - 0.5) * 0.25;
+        const speed = 140 + Math.random() * 260;
+        kumi.particles.push({
+          x,
+          y,
+          vx: Math.cos(theta) * speed,
+          vy: Math.sin(theta) * speed,
+          size: 3 + Math.random() * 5,
+          life: 1,
+          decay: 1.4 + Math.random() * 1.1,
+          color: i % 2 === 0 ? "#ff77d4" : "#b87aff"
+        });
+      }
+    }
+
+    function triggerKumiSummon(x, y, scale) {
+      kumi.active = true;
+      kumi.progress = 0.01;
+      kumi.time = 0;
+      kumi.x = x;
+      kumi.y = y;
+      kumi.scale = scale;
+      shakeTime = 0.35;
+
+      kumi.shockwaves.push({
+        x,
+        y: y - scale * 0.15,
+        radius: scale * 0.35,
+        maxRadius: scale * 2.8,
+        alpha: 1,
+        color: "#5ce1e6"
+      });
+
+      for (let i = 0; i < 38; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 80 + Math.random() * 290;
+        const palette = ["#7ef9ff", "#d49bff", "#ff85d0", "#fff3a1"];
+        kumi.particles.push({
+          x,
+          y: y - scale * 0.1,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 60,
+          size: 3 + Math.random() * 6,
+          life: 1,
+          decay: 0.9 + Math.random() * 0.9,
+          color: palette[i % palette.length]
+        });
+      }
+    }
+
+    // 제스처 상태 업데이트 (완전 펼침 -> 다시 오므림 -> 다시 펴서 보자기 소환)
+    function processHandGesture(openness, palm) {
+      lastHandCenter = palm;
+      const pct = Math.round(openness * 100);
+      opennessValueEl.textContent = `${pct}%`;
+
+      // 임계값 (히스테리시스를 두어 경계 떨림 방지)
+      const OPEN_THRESHOLD = 0.72;   // 손을 완전히 편 상태
+      const CLOSE_THRESHOLD = 0.30;  // 손을 다시 오므린 상태
+
+      if (openness >= OPEN_THRESHOLD) {
+        handStateLabel.textContent = "손 펼침 (보)";
+      } else if (openness <= CLOSE_THRESHOLD) {
+        handStateLabel.textContent = "손 오므림 (임팩트)";
+      } else {
+        handStateLabel.textContent = "중간 동작";
+      }
+
+      if (seqState === SEQUENCE.IDLE) {
+        if (openness >= OPEN_THRESHOLD) {
+          seqState = SEQUENCE.OPEN_READY;
+          updateSequenceUI("손을 활짝 폈습니다! 이제 손을 다시 오므려 임팩트를 응축하세요.");
+        } else {
+          updateSequenceUI("1단계: 손가락을 활짝 펴서 '보' 모양을 만들어 주세요.");
+        }
+      } else if (seqState === SEQUENCE.OPEN_READY) {
+        if (openness <= CLOSE_THRESHOLD) {
+          seqState = SEQUENCE.CLOSED_CHARGED;
+          triggerImpactFlash(palm.x, palm.y, palm.scale);
+          updateSequenceUI("임팩트 응축! 이제 손을 다시 펴서 보자기 쿠미귀신을 소환하세요!");
+        } else {
+          updateSequenceUI("좋아요! 손을 다시 오므려 손바닥에 임팩트를 모아주세요.");
+        }
+      } else if (seqState === SEQUENCE.CLOSED_CHARGED) {
+        if (openness >= OPEN_THRESHOLD) {
+          seqState = SEQUENCE.SUMMONED;
+          triggerKumiSummon(palm.x, palm.y, palm.scale);
+          updateSequenceUI("보자기 펼침! 손바닥 위에 쿠미귀신이 나타났습니다! (다시 오므리면 재충전)");
+        } else {
+          updateSequenceUI("응축 완료! 지금 손을 활짝 펴면 보자기 쿠미귀신이 튀어나옵니다!");
+        }
+      } else if (seqState === SEQUENCE.SUMMONED) {
+        // 소환된 상태에서 다시 손을 오므리면 새 임팩트 충전 사이클로 진입
+        if (openness <= CLOSE_THRESHOLD) {
+          seqState = SEQUENCE.CLOSED_CHARGED;
+          kumi.active = false;
+          triggerImpactFlash(palm.x, palm.y, palm.scale);
+          updateSequenceUI("새 임팩트 충전! 다시 손을 펴면 쿠미귀신이 또 나타납니다!");
+        } else {
+          updateSequenceUI("보자기 모양으로 쿠미귀신이 소환 중입니다! 손을 오므려 새 소환을 준비하세요.");
+        }
+      }
+    }
+
+    // 미러링된 카메라 영상 그리기
+    function drawMirroredVideo() {
+      const cw = window.innerWidth;
+      const ch = window.innerHeight;
+      const vw = videoEl.videoWidth || 1280;
+      const vh = videoEl.videoHeight || 720;
+
+      // cover 비율 계산
+      const scale = Math.max(cw / vw, ch / vh);
+      const dw = vw * scale;
+      const dh = vh * scale;
+      const dx = (cw - dw) / 2;
+      const dy = (ch - dh) / 2;
+
+      ctx.save();
+      ctx.translate(cw, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(videoEl, dx, dy, dw, dh);
+      ctx.restore();
+
+      // 신비로운 소환 분위기용 어두운 비네트 오버레이
+      const grad = ctx.createRadialGradient(
+        cw * 0.5, ch * 0.5, Math.min(cw, ch) * 0.15,
+        cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.72
+      );
+      grad.addColorStop(0, "rgba(15, 10, 32, 0.05)");
+      grad.addColorStop(1, "rgba(6, 4, 15, 0.55)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+
+    // 손 랜드마크 및 스켈레톤 그리기
+    function drawHandLandmarks(landmarks, openness) {
+      if (!showSkeleton) return;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      const pts = landmarks.map(lm => ({
+        x: (1 - lm.x) * w,
+        y: lm.y * h
+      }));
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      // 연결선
+      ctx.strokeStyle =
+        seqState === SEQUENCE.CLOSED_CHARGED
+          ? "rgba(255, 110, 199, 0.78)"
+          : "rgba(126, 249, 255, 0.52)";
+      ctx.lineWidth = 2.5;
+
+      for (const [a, b] of HAND_CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(pts[a].x, pts[a].y);
+        ctx.lineTo(pts[b].x, pts[b].y);
+        ctx.stroke();
+      }
+
+      // 관절 포인트
+      for (let i = 0; i < pts.length; i++) {
+        const isTip = [4, 8, 12, 16, 20].includes(i);
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, isTip ? 5.5 : 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = isTip ? "#ffdf7e" : "#ffffff";
+        ctx.fill();
+      }
+
+      // 손바닥 중앙 임팩트/개방도 링 표시
+      const palmCenter = {
+        x: (pts[0].x + pts[5].x + pts[9].x + pts[13].x + pts[17].x) / 5,
+        y: (pts[0].y + pts[5].y + pts[9].y + pts[13].y + pts[17].y) / 5
+      };
+
+      const ringRadius = 18 + openness * 36;
+      ctx.beginPath();
+      ctx.arc(palmCenter.x, palmCenter.y, ringRadius, 0, Math.PI * 2);
+      ctx.strokeStyle =
+        seqState === SEQUENCE.CLOSED_CHARGED
+          ? "rgba(255, 110, 199, 0.9)"
+          : "rgba(180, 108, 255, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 5]);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 손바닥 임팩트 플래시 이펙트 (오므릴 때 응축되는 빛과 에너지)
+    function drawImpactFlash() {
+      if (impactFlash <= 0.01 || !lastHandCenter) return;
+      const { x, y, scale } = lastHandCenter;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      const r = scale * (0.35 + (1 - impactFlash) * 0.9);
+      const glow = ctx.createRadialGradient(x, y, 2, x, y, r);
+      glow.addColorStop(0, `rgba(255, 255, 255, ${impactFlash * 0.95})`);
+      glow.addColorStop(0.35, `rgba(255, 110, 199, ${impactFlash * 0.75})`);
+      glow.addColorStop(0.7, `rgba(180, 108, 255, ${impactFlash * 0.35})`);
+      glow.addColorStop(1, "rgba(180, 108, 255, 0)");
+
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 임팩트 스파이크 선
+      ctx.strokeStyle = `rgba(255, 225, 255, ${impactFlash * 0.85})`;
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 8; i++) {
+        const ang = (Math.PI / 4) * i + (1 - impactFlash) * 0.5;
+        const inner = scale * 0.15;
+        const outer = scale * (0.55 + (1 - impactFlash) * 0.65);
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(ang) * inner, y + Math.sin(ang) * inner);
+        ctx.lineTo(x + Math.cos(ang) * outer, y + Math.sin(ang) * outer);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // 보자기 모양 + 쿠미귀신 캐릭터 애니메이션 그리기
+    function drawKumiGhost(dt) {
+      if (!kumi.active && kumi.progress <= 0) return;
+
+      if (kumi.active) {
+        kumi.progress = Math.min(1, kumi.progress + dt * 3.4);
+        kumi.time += dt;
+      } else {
+        kumi.progress = Math.max(0, kumi.progress - dt * 4.5);
+      }
+
+      if (kumi.progress <= 0) return;
+
+      // 손을 따라 부드럽게 추적
+      if (lastHandCenter) {
+        kumi.x += (lastHandCenter.x - kumi.x) * Math.min(1, dt * 14);
+        kumi.y += (lastHandCenter.y - kumi.y) * Math.min(1, dt * 14);
+        kumi.scale += (lastHandCenter.scale - kumi.scale) * Math.min(1, dt * 12);
+      }
+
+      // 탄성 이징 (overshoot)
+      const t = kumi.progress;
+      const elastic =
+        t === 1
+          ? 1
+          : 1 - Math.pow(2, -10 * t) * Math.cos(((t * 10 - 0.75) * (2 * Math.PI)) / 3);
+
+      const floatY = Math.sin(kumi.time * 4.2) * (kumi.scale * 0.08);
+      const swayX = Math.cos(kumi.time * 2.5) * (kumi.scale * 0.04);
+      const s = kumi.scale * Math.max(0.05, elastic);
+
+      ctx.save();
+      ctx.translate(kumi.x + swayX, kumi.y + floatY);
+
+      // 후광 글로우
+      const aura = ctx.createRadialGradient(0, -s * 0.15, s * 0.1, 0, -s * 0.15, s * 1.45);
+      aura.addColorStop(0, "rgba(126, 249, 255, 0.42)");
+      aura.addColorStop(0.5, "rgba(196, 128, 255, 0.24)");
+      aura.addColorStop(1, "rgba(196, 128, 255, 0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, -s * 0.15, s * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 1) 보자기(펼친 손바닥 위 천/매듭/주름) 레이어
+      // 보자기 상단 매듭(리본 귀)
+      ctx.save();
+      ctx.translate(0, -s * 0.92);
+      const knotGrad = ctx.createLinearGradient(-s * 0.3, -s * 0.2, s * 0.3, s * 0.2);
+      knotGrad.addColorStop(0, "#ff77cf");
+      knotGrad.addColorStop(0.5, "#ffd166");
+      knotGrad.addColorStop(1, "#7ef9ff");
+
+      ctx.fillStyle = knotGrad;
+      ctx.strokeStyle = "#2b1447";
+      ctx.lineWidth = Math.max(2, s * 0.025);
+
+      // 왼쪽 보자기 귀
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.06, 0);
+      ctx.quadraticCurveTo(-s * 0.42, -s * 0.28, -s * 0.48, -s * 0.04);
+      ctx.quadraticCurveTo(-s * 0.28, s * 0.12, -s * 0.06, s * 0.04);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 오른쪽 보자기 귀
+      ctx.beginPath();
+      ctx.moveTo(s * 0.06, 0);
+      ctx.quadraticCurveTo(s * 0.42, -s * 0.28, s * 0.48, -s * 0.04);
+      ctx.quadraticCurveTo(s * 0.28, s * 0.12, s * 0.06, s * 0.04);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 중앙 매듭
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // 보자기 본체(펼쳐진 사각형/물결 형태 + 전통 패턴)
+      const clothGrad = ctx.createLinearGradient(-s * 0.9, -s * 0.85, s * 0.9, s * 0.85);
+      clothGrad.addColorStop(0, "#9d5cff");
+      clothGrad.addColorStop(0.5, "#c68bff");
+      clothGrad.addColorStop(1, "#62d8ff");
+
+      ctx.fillStyle = clothGrad;
+      ctx.strokeStyle = "#291244";
+      ctx.lineWidth = Math.max(2.5, s * 0.028);
+
+      const wave = Math.sin(kumi.time * 5) * (s * 0.035);
+      ctx.beginPath();
+      // 매듭에서 퍼져나가는 보자기 실루엣
+      ctx.moveTo(0, -s * 0.84);
+      ctx.bezierCurveTo(-s * 0.55, -s * 0.78, -s * 0.96, -s * 0.35, -s * 0.92, s * 0.28 + wave);
+      ctx.quadraticCurveTo(-s * 0.46, s * 0.45 - wave, 0, s * 0.36 + wave);
+      ctx.quadraticCurveTo(s * 0.46, s * 0.45 - wave, s * 0.92, s * 0.28 + wave);
+      ctx.bezierCurveTo(s * 0.96, -s * 0.35, s * 0.55, -s * 0.78, 0, -s * 0.84);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 보자기 가장자리 금색/민트 라인 장식
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 245, 180, 0.7)";
+      ctx.lineWidth = Math.max(1.5, s * 0.016);
+      ctx.setLineDash([s * 0.08, s * 0.06]);
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.78);
+      ctx.bezierCurveTo(-s * 0.48, -s * 0.72, -s * 0.84, -s * 0.32, -s * 0.81, s * 0.22 + wave);
+      ctx.quadraticCurveTo(-s * 0.42, s * 0.37 - wave, 0, s * 0.29 + wave);
+      ctx.quadraticCurveTo(s * 0.42, s * 0.37 - wave, s * 0.81, s * 0.22 + wave);
+      ctx.bezierCurveTo(s * 0.84, -s * 0.32, s * 0.48, -s * 0.72, 0, -s * 0.78);
+      ctx.stroke();
+      ctx.restore();
+
+      // 2) 쿠미귀신 캐릭터 (보자기 중앙에서 쏙 등장하는 귀여운 도깨비/유령 캐릭터)
+      const ghostY = -s * 0.24;
+      const ghostR = s * 0.44;
+
+      // 작은 뿔 두 개
+      ctx.fillStyle = "#ffd166";
+      ctx.strokeStyle = "#291244";
+      ctx.lineWidth = Math.max(2, s * 0.022);
+
+      // 왼쪽 뿔
+      ctx.beginPath();
+      ctx.moveTo(-ghostR * 0.52, ghostY - ghostR * 0.72);
+      ctx.lineTo(-ghostR * 0.72, ghostY - ghostR * 1.25);
+      ctx.lineTo(-ghostR * 0.24, ghostY - ghostR * 0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 오른쪽 뿔
+      ctx.beginPath();
+      ctx.moveTo(ghostR * 0.52, ghostY - ghostR * 0.72);
+      ctx.lineTo(ghostR * 0.72, ghostY - ghostR * 1.25);
+      ctx.lineTo(ghostR * 0.24, ghostY - ghostR * 0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 쿠미귀신 얼굴 & 유령 꼬리 몸통
+      const bodyGrad = ctx.createRadialGradient(
+        -ghostR * 0.2, ghostY - ghostR * 0.25, ghostR * 0.1,
+        0, ghostY, ghostR * 1.15
+      );
+      bodyGrad.addColorStop(0, "#ffffff");
+      bodyGrad.addColorStop(0.7, "#f6e8ff");
+      bodyGrad.addColorStop(1, "#d8b4fe");
+
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.arc(0, ghostY, ghostR, Math.PI, 0);
+      ctx.lineTo(ghostR, ghostY + ghostR * 0.75);
+      // 아래 꼬리 물결
+      const tailWave = Math.sin(kumi.time * 7) * (ghostR * 0.14);
+      ctx.quadraticCurveTo(ghostR * 0.65, ghostY + ghostR * 0.55 + tailWave, ghostR * 0.33, ghostY + ghostR * 0.85);
+      ctx.quadraticCurveTo(0, ghostY + ghostR * 0.55 - tailWave, -ghostR * 0.33, ghostY + ghostR * 0.85);
+      ctx.quadraticCurveTo(-ghostR * 0.65, ghostY + ghostR * 0.55 + tailWave, -ghostR, ghostY + ghostR * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 볼터치 (쿠미귀신 포인트)
+      ctx.fillStyle = "rgba(255, 110, 199, 0.55)";
+      ctx.beginPath();
+      ctx.ellipse(-ghostR * 0.52, ghostY + ghostR * 0.14, ghostR * 0.16, ghostR * 0.1, 0, 0, Math.PI * 2);
+      ctx.ellipse(ghostR * 0.52, ghostY + ghostR * 0.14, ghostR * 0.16, ghostR * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 눈 (주기적인 깜빡임)
+      const isBlinking = Math.sin(kumi.time * 2.1) > 0.97;
+      ctx.fillStyle = "#1d0e33";
+      if (isBlinking) {
+        ctx.lineWidth = Math.max(2.2, ghostR * 0.06);
+        ctx.strokeStyle = "#1d0e33";
+        ctx.beginPath();
+        ctx.moveTo(-ghostR * 0.45, ghostY - ghostR * 0.05);
+        ctx.lineTo(-ghostR * 0.18, ghostY - ghostR * 0.05);
+        ctx.moveTo(ghostR * 0.18, ghostY - ghostR * 0.05);
+        ctx.lineTo(ghostR * 0.45, ghostY - ghostR * 0.05);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(-ghostR * 0.32, ghostY - ghostR * 0.06, ghostR * 0.13, 0, Math.PI * 2);
+        ctx.arc(ghostR * 0.32, ghostY - ghostR * 0.06, ghostR * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 눈 반짝임
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(-ghostR * 0.36, ghostY - ghostR * 0.11, ghostR * 0.05, 0, Math.PI * 2);
+        ctx.arc(ghostR * 0.28, ghostY - ghostR * 0.11, ghostR * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 장난기 가득한 미소 ("ω" / 웃는 입)
+      ctx.strokeStyle = "#1d0e33";
+      ctx.lineWidth = Math.max(2.2, ghostR * 0.065);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(-ghostR * 0.1, ghostY + ghostR * 0.18, ghostR * 0.11, 0.15 * Math.PI, 0.95 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(ghostR * 0.1, ghostY + ghostR * 0.18, ghostR * 0.11, 0.05 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+
+      // 상단 "쿠미귀신" 태그 리본
+      ctx.font = `800 ${Math.max(13, Math.round(s * 0.17))}px "Noto Sans KR", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fff8c4";
+      ctx.strokeStyle = "rgba(32, 12, 58, 0.9)";
+      ctx.lineWidth = 4;
+      const labelY = -s * 1.18;
+      ctx.strokeText("✨ 쿠미귀신 ✨", 0, labelY);
+      ctx.fillText("✨ 쿠미귀신 ✨", 0, labelY);
+
+      ctx.restore();
+    }
+
+    // 충격파 및 파티클 업데이트/렌더링
+    function drawEffects(dt) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // 충격파 링
+      for (let i = kumi.shockwaves.length - 1; i >= 0; i--) {
+        const sw = kumi.shockwaves[i];
+        sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, dt * 8);
+        sw.alpha -= dt * 1.9;
+
+        if (sw.alpha <= 0) {
+          kumi.shockwaves.splice(i, 1);
+          continue;
+        }
+
+        ctx.strokeStyle = sw.color;
+        ctx.globalAlpha = Math.max(0, sw.alpha);
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 파티클
+      for (let i = kumi.particles.length - 1; i >= 0; i--) {
+        const p = kumi.particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 180 * dt; // 약한 중력
+        p.life -= p.decay * dt;
+
+        if (p.life <= 0) {
+          kumi.particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // 메인 렌더 루프
+    let prevTimestamp = performance.now();
+
+    function renderLoop(now) {
+      const dt = Math.min(0.05, (now - prevTimestamp) / 1000);
+      prevTimestamp = now;
+
+      impactFlash = Math.max(0, impactFlash - dt * 2.6);
+      shakeTime = Math.max(0, shakeTime - dt);
+
+      // MediaPipe 추론
+      if (
+        handLandmarker &&
+        videoEl.readyState >= 2 &&
+        videoEl.currentTime !== lastVideoTime
+      ) {
+        lastVideoTime = videoEl.currentTime;
+        const results = handLandmarker.detectForVideo(videoEl, now);
+
+        if (results.landmarks && results.landmarks.length > 0) {
+          // 가장 큰 손(가까운 손) 선택
+          const landmarks = results.landmarks[0];
+          const rawOpenness = computeHandOpenness(landmarks);
+          smoothedOpenness += (rawOpenness - smoothedOpenness) * Math.min(1, dt * 16);
+          const palm = getPalmTransform(landmarks);
+          processHandGesture(smoothedOpenness, palm);
+
+          ctx.save();
+          if (shakeTime > 0) {
+            const mag = (shakeTime / 0.35) * 9;
+            ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
+          }
+          drawMirroredVideo();
+          drawHandLandmarks(landmarks, smoothedOpenness);
+          drawImpactFlash();
+          drawKumiGhost(dt);
+          drawEffects(dt);
+          ctx.restore();
+
+          animationFrameId = requestAnimationFrame(renderLoop);
+          return;
+        } else {
+          handStateLabel.textContent = "미검출";
+          opennessValueEl.textContent = "0%";
+        }
+      }
+
+      // 손 미검출 시에도 영상 및 진행 중인 소환 애니메이션/파티클은 계속 렌더링
+      ctx.save();
+      if (shakeTime > 0) {
+        const mag = (shakeTime / 0.35) * 9;
+        ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
+      }
+      if (videoEl.readyState >= 2) {
+        drawMirroredVideo();
+      } else {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      }
+      drawImpactFlash();
+      drawKumiGhost(dt);
+      drawEffects(dt);
+      ctx.restore();
+
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    // MediaPipe Tasks-Vision HandLandmarker 및 전면 카메라 초기화
+    async function initCameraAndModel() {
+      try {
+        if (!handLandmarker) {
+          const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+          );
+
+          handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+              delegate: "GPU"
+            },
+            runningMode: "VIDEO",
+            numHands: 1,
+            minHandDetectionConfidence: 0.55,
+            minHandPresenceConfidence: 0.55,
+            minTrackingConfidence: 0.55
+          });
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        videoEl.srcObject = stream;
+        await videoEl.play();
+
+        overlayEl.classList.add("hidden");
+        seqState = SEQUENCE.IDLE;
+        updateSequenceUI("1단계: 손가락을 활짝 펴서 '보' 모양을 만들어 주세요.");
+
+        if (!animationFrameId) {
+          prevTimestamp = performance.now();
+          animationFrameId = requestAnimationFrame(renderLoop);
+        }
+      } catch (err) {
+        console.error(err);
+        spinnerEl.style.display = "none";
+        retryBtn.style.display = "inline-block";
+        statusText.textContent = "카메라/모델 초기화 실패";
+        overlayDescEl.innerHTML =
+          "전면 카메라 접근이 차단되었거나 네트워크 오류가 발생했습니다.<br />" +
+          `<span style="color:#ff9ad5;font-size:12px;">${err.message || err}</span>`;
+      }
+    }
+
+    initCameraAndModel();
+  </script>
+</body>
+</html>
