@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>손바닥 블랙홀 · MediaPipe Tasks-Vision</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050509;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+    }
+    #wrap {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    video {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .top-bar {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .box {
+      background: rgba(9, 10, 18, 0.78);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 12px 14px;
+      max-width: 540px;
+    }
+    .box h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e9d5ff;
+      margin-bottom: 4px;
+    }
+    #status {
+      font-size: 12.5px;
+      color: #e2e8f0;
+      line-height: 1.45;
+    }
+    .meter {
+      margin-top: 8px;
+      width: 220px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      overflow: hidden;
+    }
+    #meterFill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #7e22ce, #c084fc, #38bdf8);
+      transition: width 0.06s linear;
+    }
+    .btns {
+      pointer-events: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 9px;
+      border: 1px solid rgba(192, 132, 252, 0.45);
+      background: rgba(88, 28, 135, 0.72);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(126, 34, 206, 0.9); }
+    .bottom-tip {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(9, 10, 18, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 12px;
+      color: #e2e8f0;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="top-bar">
+      <div class="box">
+        <h1>DARK VORTEX PALM · 전면 카메라 블랙홀</h1>
+        <div id="status">전면 카메라 시작 중...</div>
+        <div class="meter"><div id="meterFill"></div></div>
+      </div>
+      <div class="btns">
+        <button id="camBtn" type="button">카메라 다시 켜기</button>
+        <button id="openBtn" type="button">1. 손 펴기</button>
+        <button id="closeBtn" type="button">2. 손 오므리기</button>
+        <button id="bhBtn" type="button">3. 펼치며 블랙홀</button>
+        <button id="resetBtn" type="button">초기화</button>
+      </div>
+    </div>
+
+    <div class="bottom-tip">
+      손 펴기(보자기) → 손 오므리기(손바닥 에너지 구 충전) → 다시 손 펴기(전방 굵은 블랙홀 흡인)
+    </div>
+  </div>
+
+  <script type="module">
+    import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const statusEl = document.getElementById("status");
+    const meterFill = document.getElementById("meterFill");
+
+    const CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],
+      [0,17]
+    ];
+
+    let w = 0, h = 0;
+    let cameraReady = false;
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let streamRef = null;
+
+    const state = {
+      time: 0,
+      openness: 0.8,
+      smoothOpen: 0.8,
+      wasOpen: false,
+      charging: false,
+      charge: 0, // 0 ~ 100
+      bhActive: false,
+      bhPower: 0,
+      bhTimer: 0,
+      palmX: 0,
+      palmY: 0,
+      targetX: 0,
+      targetY: 0,
+      bhX: 0,
+      bhY: 0,
+      landmarks: null,
+      forceMode: null
+    };
+
+    const particles = Array.from({ length: 200 }, () => makeParticle(false));
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!state.palmX) {
+        state.palmX = w * 0.5;
+        state.palmY = h * 0.65;
+        state.targetX = state.palmX;
+        state.targetY = state.palmY;
+      }
+    }
+
+    function makeParticle(fromEdge = true) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = fromEdge
+        ? Math.max(w, h) * (0.35 + Math.random() * 0.45)
+        : 60 + Math.random() * Math.max(w, h) * 0.45;
+      const cx = state.bhX || w * 0.5;
+      const cy = state.bhY || h * 0.25;
+      return {
+        x: cx + Math.cos(ang) * dist,
+        y: cy + Math.sin(ang) * dist,
+        vx: 0,
+        vy: 0,
+        width: 1.5 + Math.random() * 2.8,
+        hue: Math.random() < 0.65 ? 270 + Math.random() * 25 : 195 + Math.random() * 35
+      };
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function calcOpenness(lm) {
+      const palmLen = Math.max(dist(lm[0], lm[9]), 0.02);
+      const tips = [4, 8, 12, 16, 20];
+      const avg = tips.reduce((acc, idx) => acc + dist(lm[0], lm[idx]) / palmLen, 0) / tips.length;
+      return Math.max(0, Math.min(1, (avg - 0.95) / (2.1 - 0.95)));
+    }
+
+    function startBlackHole() {
+      state.bhActive = true;
+      state.charging = false;
+      state.bhTimer = 2.4 + (state.charge / 100) * 2.2;
+      state.bhX = state.palmX;
+      state.bhY = Math.max(h * 0.16, state.palmY - Math.min(h * 0.36, 250));
+      for (let i = 0; i < particles.length; i++) {
+        particles[i] = makeParticle(true);
+      }
+    }
+
+    function updateState(dt) {
+      if (state.forceMode === "OPEN") state.openness = 0.95;
+      if (state.forceMode === "CLOSED") state.openness = 0.1;
+
+      state.smoothOpen += (state.openness - state.smoothOpen) * Math.min(1, dt * 12);
+      const op = state.smoothOpen;
+
+      if (op >= 0.72) {
+        state.wasOpen = true;
+      }
+
+      if (state.wasOpen && op <= 0.42) {
+        state.charging = true;
+        state.charge = Math.min(100, state.charge + dt * 52);
+      } else if (op > 0.42 && op < 0.72 && state.charging) {
+        state.charge = Math.max(0, state.charge - dt * 12);
+      }
+
+      if (state.charging && op >= 0.72 && state.charge >= 12) {
+        startBlackHole();
+      } else if (op >= 0.72 && !state.bhActive) {
+        state.charging = false;
+      }
+
+      if (state.bhActive) {
+        state.bhTimer -= dt;
+        const targetP = state.bhTimer > 0.45 ? 1 : Math.max(0, state.bhTimer / 0.45);
+        state.bhPower += (targetP - state.bhPower) * Math.min(1, dt * 9);
+
+        const destX = state.palmX;
+        const destY = Math.max(h * 0.16, state.palmY - Math.min(h * 0.36, 250));
+        state.bhX += (destX - state.bhX) * Math.min(1, dt * 8);
+        state.bhY += (destY - state.bhY) * Math.min(1, dt * 8);
+
+        if (state.bhTimer <= 0 && state.bhPower < 0.03) {
+          state.bhActive = false;
+          state.bhPower = 0;
+          state.charge = 0;
+        }
+      } else {
+        state.bhPower += (0 - state.bhPower) * Math.min(1, dt * 8);
+      }
+
+      state.palmX += (state.targetX - state.palmX) * Math.min(1, dt * 14);
+      state.palmY += (state.targetY - state.palmY) * Math.min(1, dt * 14);
+
+      const pct = Math.round(state.charge);
+      meterFill.style.width = `${pct}%`;
+
+      if (cameraReady) {
+        if (state.bhActive) {
+          statusEl.textContent = "전방 굵은 블랙홀 전개 중! 주변 빛과 입자를 빨아들이는 중입니다.";
+        } else if (state.charging) {
+          statusEl.textContent = `손바닥 블랙홀 에너지 구 충전 중 (${pct}%) — 손을 다시 펴면 전방으로 발사됩니다!`;
+        } else if (state.wasOpen) {
+          statusEl.textContent = "손 펼침 확인 — 손을 오므려 손바닥에 검은 수염 스타일 에너지 구를 만드세요.";
+        } else {
+          statusEl.textContent = "전면 카메라 활성 중 — 손을 완전히 폈다가 오므려 보세요.";
+        }
+      }
+    }
+
+    function drawCameraOrBg() {
+      if (cameraReady && video.readyState >= 2) {
+        ctx.save();
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        const vidRatio = video.videoWidth / video.videoHeight;
+        const canRatio = w / h;
+        let dw = w, dh = h, dx = 0, dy = 0;
+        if (canRatio > vidRatio) {
+          dh = w / vidRatio;
+          dy = (h - dh) * 0.5;
+        } else {
+          dw = h * vidRatio;
+          dx = (w - dw) * 0.5;
+        }
+        ctx.drawImage(video, dx, dy, dw, dh);
+        ctx.restore();
+
+        ctx.fillStyle = "rgba(6, 6, 14, 0.32)";
+        ctx.fillRect(0, 0, w, h);
+      } else {
+        ctx.fillStyle = "#06060d";
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+
+    function drawHand() {
+      if (!state.landmarks) return;
+      ctx.save();
+      ctx.strokeStyle = "rgba(216, 180, 254, 0.55)";
+      ctx.lineWidth = 2;
+      for (const [a, b] of CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(state.landmarks[a].x * w, state.landmarks[a].y * h);
+        ctx.lineTo(state.landmarks[b].x * w, state.landmarks[b].y * h);
+        ctx.stroke();
+      }
+      for (let i = 0; i < state.landmarks.length; i++) {
+        ctx.fillStyle = i === 9 ? "#38bdf8" : "#f3e8ff";
+        ctx.beginPath();
+        ctx.arc(state.landmarks[i].x * w, state.landmarks[i].y * h, i === 9 ? 5 : 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawPalmOrb() {
+      if (!state.charging && state.charge <= 1) return;
+      const ratio = state.charge / 100;
+      const r = (18 + ratio * 54) * (1 + Math.sin(state.time * 16) * 0.07);
+      const x = state.palmX;
+      const y = state.palmY;
+
+      ctx.save();
+      const aura = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 2.4);
+      aura.addColorStop(0, "rgba(0,0,0,0.98)");
+      aura.addColorStop(0.5, `rgba(88,28,135,${0.45 + ratio * 0.45})`);
+      aura.addColorStop(0.8, `rgba(56,189,248,${0.15 + ratio * 0.25})`);
+      aura.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      const core = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r);
+      core.addColorStop(0, "#020205");
+      core.addColorStop(0.75, "#090414");
+      core.addColorStop(1, "#4c1d95");
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      const tendrils = 12;
+      for (let i = 0; i < tendrils; i++) {
+        const a = state.time * 3.8 + (i * Math.PI * 2) / tendrils;
+        const reach = r * (1.2 + ((i * 13 + Math.floor(state.time * 25)) % 9) * 0.12);
+        ctx.strokeStyle = i % 2 === 0 ? "rgba(192,132,252,0.75)" : "rgba(15,10,30,0.9)";
+        ctx.lineWidth = 1.6 + ratio * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawBlackHole(dt) {
+      if (state.bhPower <= 0.01) return;
+      const cx = state.bhX;
+      const cy = state.bhY;
+      const p = state.bhPower;
+      const horizon = (62 + (state.charge / 100) * 42) * p;
+
+      ctx.save();
+
+      const beam = ctx.createLinearGradient(state.palmX, state.palmY, cx, cy);
+      beam.addColorStop(0, `rgba(168,85,247,${0.12 * p})`);
+      beam.addColorStop(1, `rgba(56,189,248,${0.42 * p})`);
+      ctx.strokeStyle = beam;
+      ctx.lineWidth = horizon * 0.9;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(state.palmX, state.palmY);
+      ctx.lineTo(cx, cy);
+      ctx.stroke();
+
+      for (let i = 0; i < 5; i++) {
+        const rad = horizon * (1.25 + i * 0.35);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(state.time * (4.5 - i * 0.5) * (i % 2 === 0 ? 1 : -1));
+        ctx.scale(1.35, 0.56);
+        ctx.strokeStyle = i % 2 === 0
+          ? `rgba(192,132,252,${0.8 * p})`
+          : `rgba(56,189,248,${0.65 * p})`;
+        ctx.lineWidth = (14 - i * 2) * p;
+        ctx.beginPath();
+        ctx.arc(0, 0, rad, 0, Math.PI * 1.75);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const glow = ctx.createRadialGradient(cx, cy, horizon * 0.85, cx, cy, horizon * 1.45);
+      glow.addColorStop(0, "rgba(0,0,0,1)");
+      glow.addColorStop(0.6, `rgba(168,85,247,${0.75 * p})`);
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, horizon * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#010103";
+      ctx.beginPath();
+      ctx.arc(cx, cy, horizon, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (let i = 0; i < particles.length; i++) {
+        const pt = particles[i];
+        const dx = cx - pt.x;
+        const dy = cy - pt.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = dx / d;
+        const ny = dy / d;
+        const tx = -ny;
+        const ty = nx;
+
+        const pull = (580 + 190000 / (d + 40)) * p;
+        const swirl = (280 + 65000 / (d + 45)) * p;
+
+        pt.vx = (pt.vx + (nx * pull + tx * swirl) * dt) * 0.96;
+        pt.vy = (pt.vy + (ny * pull + ty * swirl) * dt) * 0.96;
+
+        const px = pt.x;
+        const py = pt.y;
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+
+        if (d < horizon * 0.9) {
+          particles[i] = makeParticle(true);
+          continue;
+        }
+
+        ctx.strokeStyle = `hsla(${pt.hue}, 95%, 72%, ${0.85 * p})`;
+        ctx.lineWidth = pt.width;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    async function startCamera() {
+      try {
+        if (streamRef) {
+          streamRef.getTracks().forEach(t => t.stop());
+          streamRef = null;
+        }
+        cameraReady = false;
+        statusEl.textContent = "전면 카메라 권한 요청 중...";
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        streamRef = stream;
+        video.srcObject = stream;
+        await video.play();
+        cameraReady = true;
+        statusEl.textContent = "전면 카메라 연결 완료 — 손 인식 모델 불러오는 중...";
+      } catch (err) {
+        cameraReady = false;
+        const secureTip = (!window.isSecureContext && location.hostname !== "localhost")
+          ? " (localhost 또는 https:// 로 열어야 합니다)"
+          : "";
+        statusEl.textContent = `카메라 실행 실패${secureTip}: ${err?.name || ""} ${err?.message || ""}`;
+      }
+    }
+
+    async function initHandLandmarker() {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        const modelUrl =
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+        try {
+          handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numHands: 1
+          });
+        } catch {
+          handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "CPU" },
+            runningMode: "VIDEO",
+            numHands: 1
+          });
+        }
+      } catch (err) {
+        if (cameraReady) {
+          statusEl.textContent = `카메라는 켜졌으나 손 인식 모델 로드 실패: ${err?.message || err}`;
+        }
+      }
+    }
+
+    function detectHands() {
+      if (!cameraReady || !handLandmarker || video.readyState < 2) return;
+      if (video.currentTime === lastVideoTime) return;
+      lastVideoTime = video.currentTime;
+
+      const res = handLandmarker.detectForVideo(video, performance.now());
+      if (res.landmarks && res.landmarks.length > 0) {
+        const mirrored = res.landmarks[0].map(pt => ({ x: 1 - pt.x, y: pt.y, z: pt.z }));
+        state.landmarks = mirrored;
+        state.forceMode = null;
+        state.targetX = mirrored[9].x * w;
+        state.targetY = mirrored[9].y * h;
+        state.openness = calcOpenness(mirrored);
+      } else {
+        state.landmarks = null;
+      }
+    }
+
+    let prev = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.05, (now - prev) / 1000);
+      prev = now;
+      state.time += dt;
+
+      detectHands();
+      updateState(dt);
+      drawCameraOrBg();
+      drawHand();
+      drawPalmOrb();
+      drawBlackHole(dt);
+
+      requestAnimationFrame(frame);
+    }
+
+    document.getElementById("camBtn").addEventListener("click", startCamera);
+    document.getElementById("openBtn").addEventListener("click", () => { state.forceMode = "OPEN"; });
+    document.getElementById("closeBtn").addEventListener("click", () => {
+      state.wasOpen = true;
+      state.forceMode = "CLOSED";
+    });
+    document.getElementById("bhBtn").addEventListener("click", () => {
+      state.wasOpen = true;
+      state.charge = Math.max(state.charge, 85);
+      state.forceMode = "OPEN";
+      startBlackHole();
+    });
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      state.forceMode = null;
+      state.wasOpen = false;
+      state.charging = false;
+      state.charge = 0;
+      state.bhActive = false;
+      state.bhPower = 0;
+      state.bhTimer = 0;
+      state.palmX = w * 0.5;
+      state.palmY = h * 0.65;
+      state.targetX = state.palmX;
+      state.targetY = state.palmY;
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!cameraReady || state.forceMode) {
+        state.targetX = e.clientX;
+        state.targetY = e.clientY;
+      }
+    });
+
+    window.addEventListener("resize", resize);
+    resize();
+    startCamera();
+    initHandLandmarker();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
