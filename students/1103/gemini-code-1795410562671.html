@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>티쳐블머신 실시간 인식 & 음성 안내</title>
+  <title>손 제스처 잉크 블래스트 (MediaPipe Tasks-Vision)</title>
   <style>
     * {
       box-sizing: border-box;
@@ -11,490 +11,903 @@
       padding: 0;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 24px;
+    :root {
+      --bg: #0b0e14;
+      --panel: rgba(16, 21, 32, 0.78);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #f3f6fc;
+      --muted: #9aa6bd;
+      --accent: #38bdf8;
+      --accent-2: #f43f5e;
+      --ok: #22c55e;
     }
 
-    .container {
-      width: 100%;
-      max-width: 920px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow-x: hidden;
     }
 
     .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .header h1 {
-      font-size: 1.35rem;
-      font-weight: 700;
-    }
-
-    .badge {
-      font-size: 0.85rem;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: #334155;
-      color: #e2e8f0;
-    }
-
-    .badge.active {
-      background: #065f46;
-      color: #a7f3d0;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: start;
-    }
-
-    @media (max-width: 768px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .webcam-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-    }
-
-    #webcam-container {
       width: 100%;
-      max-width: 360px;
-      aspect-ratio: 1 / 1;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #0b1120;
-      border: 2px solid #475569;
+      max-width: 960px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
     }
 
-    #webcam-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
+    .title-group h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    button:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    .stage-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 16 / 10;
+      min-height: 320px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #05070b;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    video {
+      display: none;
+    }
+
+    canvas#outputCanvas {
+      width: 100%;
+      height: 100%;
       display: block;
     }
 
-    .message-card {
-      width: 100%;
-      max-width: 360px;
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 14px;
-      padding: 16px;
-      min-height: 92px;
+    .hud-top {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
       display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 6px;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      pointer-events: none;
     }
 
-    .message-label {
+    .badge {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      padding: 8px 12px;
+      border-radius: 12px;
       font-size: 0.8rem;
-      color: #94a3b8;
+      line-height: 1.4;
     }
 
-    .message-text {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #38bdf8;
-      line-height: 1.45;
-      word-break: keep-all;
+    .badge strong {
+      color: var(--accent);
     }
 
-    .panel {
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 20px;
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: #eab308;
+      vertical-align: middle;
     }
 
-    .panel-title {
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 6px;
+    .status-dot.ready {
+      background: var(--ok);
     }
 
-    .panel-sub {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      margin-bottom: 18px;
+    .status-dot.error {
+      background: var(--accent-2);
     }
 
-    .bars {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .bar-item {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .bar-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.95rem;
-      font-weight: 600;
-    }
-
-    .bar-track {
+    .guide-bar {
       width: 100%;
-      height: 18px;
-      background: #1e293b;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid #334155;
-    }
-
-    .bar-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #3b82f6, #22d3ee);
-      transition: width 0.12s ease-out;
-    }
-
-    .bar-fill.confirmed {
-      background: linear-gradient(90deg, #10b981, #34d399);
-    }
-
-    .meta {
-      margin-top: 18px;
-      padding-top: 14px;
-      border-top: 1px solid #1e293b;
-      font-size: 0.82rem;
-      color: #94a3b8;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .notice {
+      max-width: 960px;
       margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .step-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
       font-size: 0.8rem;
-      color: #fbbf24;
-      min-height: 1.1em;
+      color: var(--muted);
+    }
+
+    .step-card b {
+      display: block;
+      color: var(--text);
+      margin-bottom: 3px;
+      font-size: 0.85rem;
+    }
+
+    .step-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+    }
+
+    .overlay-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      background: rgba(8, 11, 18, 0.72);
+      backdrop-filter: blur(6px);
+      z-index: 5;
+    }
+
+    .overlay-msg.hidden {
+      display: none;
+    }
+
+    .overlay-msg p {
+      max-width: 440px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 10px 0 16px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 640px) {
+      .guide-bar {
+        grid-template-columns: 1fr;
+      }
+      .stage-wrap {
+        aspect-ratio: 4 / 3;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>실시간 인식 & 한국어 음성 안내</h1>
-      <div id="status-badge" class="badge">모델 및 웹캠 시작 중...</div>
+  <div class="header">
+    <div class="title-group">
+      <h1>손 제스처 잉크 블래스트</h1>
+      <p>손 펴기 → 오므려 충전 → 다시 펴서 전방 잉크 폭발</p>
     </div>
-
-    <div class="grid">
-      <div class="webcam-box">
-        <div id="webcam-container">카메라 연결 대기 중...</div>
-        <div class="message-card">
-          <div class="message-label" id="state-sub">현재 확정 상태: 대기 중</div>
-          <div class="message-text" id="greeting-display">인식을 기다리는 중입니다.</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">레이블별 실시간 인식 확률</div>
-        <div class="panel-sub">확신도 75% 이상이 7프레임 연속 감지되면 상태를 확정합니다.</div>
-        <div id="label-bars" class="bars"></div>
-        <div class="meta">
-          <span id="candidate-info">후보: - (0/7)</span>
-          <span id="last-spoken">마지막 음성: 없음</span>
-        </div>
-        <div id="audio-notice" class="notice"></div>
-      </div>
+    <div class="controls">
+      <button id="toggleLandmarksBtn" type="button">랜드마크: ON</button>
+      <button id="clearInkBtn" type="button">잉크 지우기</button>
+      <button id="restartBtn" type="button">카메라 재시작</button>
     </div>
   </div>
 
-  <!-- TensorFlow.js & Teachable Machine Image Library -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <div class="stage-wrap">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="outputCanvas"></canvas>
 
-  <script>
-    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/sCzbJTjS8/";
+    <div class="hud-top">
+      <div class="badge">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">모델 로딩 중...</span>
+      </div>
+      <div class="badge" id="stateBadge">
+        단계: <strong>대기</strong> · 손 상태: <strong>미감지</strong>
+      </div>
+    </div>
 
-    // 프레임 흔들림 방지 설정
-    const CONFIDENCE_THRESHOLD = 0.75; // 일정 확신도 이상
-    const REQUIRED_CONSECUTIVE_FRAMES = 7; // 연속 감지 프레임 수
+    <div id="overlayMsg" class="overlay-msg">
+      <h2 id="overlayTitle">전면 카메라 초기화 중</h2>
+      <p id="overlayDesc">카메라 권한을 허용해 주세요. HTTPS 또는 localhost 환경에서 가장 안정적으로 동작합니다.</p>
+      <button id="retryBtn" type="button" style="display:none;">다시 시도</button>
+    </div>
+  </div>
 
-    function normalizeLabel(rawName) {
-      return rawName.replace(/^\[|\]$/g, "").trim();
-    }
+  <div class="guide-bar">
+    <div id="step1Card" class="step-card">
+      <b>1단계 · 손 완전히 펴기 (보자기)</b>
+      다섯 손가락을 활짝 펴서 준비 상태로 만듭니다.
+    </div>
+    <div id="step2Card" class="step-card">
+      <b>2단계 · 손 오므리기 (게이지 충전)</b>
+      손을 주먹처럼 오므리면 손바닥 게이지가 빠르게 찹니다.
+    </div>
+    <div id="step3Card" class="step-card">
+      <b>3단계 · 다시 펴기 (잉크 발사·폭발)</b>
+      충전된 상태에서 다시 손을 펴면 전방으로 잉크가 날아가 터집니다.
+    </div>
+  </div>
 
-    // 레이블별 화면 표시 문구 및 음성 안내 문구
-    const LABEL_ACTIONS = {
-      "나": {
-        displayText: "어서오세요",
-        speakText: "어서오세요",
-        isGreeting: true
-      },
-      "친구": {
-        displayText: "안녕하세요? 용건을 말해주세요",
-        speakText: "안녕하세요? 용건을 말해주세요",
-        isGreeting: true
-      },
-      "배경": {
-        displayText: "사람이 없는 상태입니다.",
-        speakText: null,
-        isGreeting: false
-      }
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const stateBadge = document.getElementById("stateBadge");
+    const overlayMsg = document.getElementById("overlayMsg");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayDesc = document.getElementById("overlayDesc");
+    const retryBtn = document.getElementById("retryBtn");
+    const toggleLandmarksBtn = document.getElementById("toggleLandmarksBtn");
+    const clearInkBtn = document.getElementById("clearInkBtn");
+    const restartBtn = document.getElementById("restartBtn");
+
+    const step1Card = document.getElementById("step1Card");
+    const step2Card = document.getElementById("step2Card");
+    const step3Card = document.getElementById("step3Card");
+
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+    const INK_PALETTES = [
+      { core: "#ff2a6d", mid: "#ff5e8e", glow: "rgba(255, 42, 109, 0.45)" },
+      { core: "#00e5ff", mid: "#5cf0ff", glow: "rgba(0, 229, 255, 0.45)" },
+      { core: "#a855f7", mid: "#c084fc", glow: "rgba(168, 85, 247, 0.45)" },
+      { core: "#facc15", mid: "#fde047", glow: "rgba(250, 204, 21, 0.45)" },
+      { core: "#10b981", mid: "#34d399", glow: "rgba(16, 185, 129, 0.45)" }
+    ];
+
+    let handLandmarker = null;
+    let showLandmarks = true;
+    let rafId = null;
+    let lastVideoTime = -1;
+    let lastFrameMs = performance.now();
+    let paletteIndex = 0;
+
+    // 제스처 상태머신:
+    // "IDLE" -> 손을 활짝 펴면 "ARMED_OPEN" -> 손을 오므리면 "CHARGING" -> 충전 후 다시 펴면 잉크 발사!
+    const handTracker = {
+      phase: "IDLE",
+      charge: 0,           // 0.0 ~ 1.0
+      smoothedOpenness: 0.5,
+      palmX: 0.5,          // 정규화 좌표 (미러링 반영 전 0~1)
+      palmY: 0.5,
+      dirX: 0,             // 손바닥 -> 중지 방향 (캔버스 좌표 기준)
+      dirY: -1,
+      cooldown: 0
     };
 
-    let model;
-    let webcam;
-    const barElements = new Map();
+    // 날아가는 잉크 탄환 & 폭발 파티클/얼룩
+    const inkProjectiles = [];
+    const inkParticles = [];
+    const inkSplatters = [];
 
-    // 상태 추적 변수
-    let confirmedState = null;       // 현재 확정된 상태
-    let candidateState = null;       // 연속 카운트 중인 후보 상태
-    let consecutiveCount = 0;      // 후보 상태 연속 프레임 수
-    let lastSpokenState = null;      // 마지막으로 음성 출력한 상태
+    function setStatus(state, text) {
+      statusDot.className = "status-dot" + (state ? ` ${state}` : "");
+      statusText.textContent = text;
+    }
 
-    const badgeEl = document.getElementById("status-badge");
-    const webcamContainerEl = document.getElementById("webcam-container");
-    const barsContainerEl = document.getElementById("label-bars");
-    const stateSubEl = document.getElementById("state-sub");
-    const greetingDisplayEl = document.getElementById("greeting-display");
-    const candidateInfoEl = document.getElementById("candidate-info");
-    const lastSpokenEl = document.getElementById("last-spoken");
-    const audioNoticeEl = document.getElementById("audio-notice");
+    function showOverlay(title, desc, canRetry = false) {
+      overlayTitle.textContent = title;
+      overlayDesc.textContent = desc;
+      retryBtn.style.display = canRetry ? "inline-block" : "none";
+      overlayMsg.classList.remove("hidden");
+    }
 
-    function getKoreanVoice() {
-      if (!("speechSynthesis" in window)) return null;
-      const voices = window.speechSynthesis.getVoices();
-      return (
-        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko")) ||
-        null
+    function hideOverlay() {
+      overlayMsg.classList.add("hidden");
+    }
+
+    function syncCanvasSize() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.max(1, Math.round(rect.width * dpr));
+      const targetH = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+    }
+
+    window.addEventListener("resize", syncCanvasSize);
+
+    toggleLandmarksBtn.addEventListener("click", () => {
+      showLandmarks = !showLandmarks;
+      toggleLandmarksBtn.textContent = `랜드마크: ${showLandmarks ? "ON" : "OFF"}`;
+    });
+
+    clearInkBtn.addEventListener("click", () => {
+      inkProjectiles.length = 0;
+      inkParticles.length = 0;
+      inkSplatters.length = 0;
+    });
+
+    retryBtn.addEventListener("click", () => {
+      initApp();
+    });
+
+    restartBtn.addEventListener("click", () => {
+      initApp();
+    });
+
+    async function initHandLandmarker() {
+      if (handLandmarker) return handLandmarker;
+      setStatus("", "MediaPipe Vision 모델 로딩 중...");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55
+      });
+      return handLandmarker;
+    }
+
+    async function initWebcam() {
+      setStatus("", "전면 카메라 연결 중...");
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((t) => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      video.srcObject = stream;
+      await new Promise((resolve) => {
+        if (video.readyState >= 2) resolve();
+        else video.onloadedmetadata = () => resolve();
+      });
+      await video.play();
+    }
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dz = (a.z || 0) - (b.z || 0);
+      return Math.hypot(dx, dy, dz);
+    }
+
+    // 손목(0)과 중지 MCP(9) 거리를 기준으로 정규화하여 카메라 거리 변화에도 강건하게 펴짐 정도 계산
+    function computeHandOpenness(lm) {
+      const palmScale = Math.max(dist(lm[0], lm[9]), 0.04);
+      const tips = [4, 8, 12, 16, 20];
+      const wrist = lm[0];
+      const avgTipDist =
+        tips.reduce((sum, idx) => sum + dist(wrist, lm[idx]), 0) / tips.length;
+
+      // 오므렸을 때 ~0.85 * palmScale, 활짝 폈을 때 ~2.05 * palmScale 수준
+      const ratio = avgTipDist / palmScale;
+      const normalized = (ratio - 0.92) / (1.95 - 0.92);
+      return Math.max(0, Math.min(1, normalized));
+    }
+
+    // 손바닥 중심 좌표 (0~1, 미러링 전 기준)
+    function getPalmCenter(lm) {
+      const indices = [0, 5, 9, 13, 17];
+      let x = 0;
+      let y = 0;
+      for (const i of indices) {
+        x += lm[i].x;
+        y += lm[i].y;
+      }
+      return { x: x / indices.length, y: y / indices.length };
+    }
+
+    // 미러링된 캔버스 좌표 변환
+    function toCanvasPoint(normX, normY) {
+      return {
+        x: (1 - normX) * canvas.width,
+        y: normY * canvas.height
+      };
+    }
+
+    function updateStepCards() {
+      step1Card.classList.toggle("active", handTracker.phase === "ARMED_OPEN");
+      step2Card.classList.toggle("active", handTracker.phase === "CHARGING");
+      step3Card.classList.toggle(
+        "active",
+        handTracker.phase === "CHARGING" && handTracker.charge >= 0.45
       );
     }
 
-    function speakKorean(text) {
-      if (!text) return;
-      if (!("speechSynthesis" in window)) {
-        audioNoticeEl.textContent = "이 브라우저는 음성 합성(Web Speech API)을 지원하지 않습니다.";
+    function updateStateBadge(detected) {
+      if (!detected) {
+        stateBadge.innerHTML =
+          `단계: <strong>${phaseLabel(handTracker.phase)}</strong> · 손 상태: <strong>미감지</strong>`;
+        return;
+      }
+      const openPct = Math.round(handTracker.smoothedOpenness * 100);
+      const chargePct = Math.round(handTracker.charge * 100);
+      const handShape =
+        openPct >= 66 ? "보자기(활짝 핌)" : openPct <= 34 ? "주먹(오므림)" : "중간";
+
+      stateBadge.innerHTML =
+        `단계: <strong>${phaseLabel(handTracker.phase)}</strong> · ` +
+        `손: <strong>${handShape} (${openPct}%)</strong> · ` +
+        `게이지: <strong>${chargePct}%</strong>`;
+    }
+
+    function phaseLabel(phase) {
+      switch (phase) {
+        case "IDLE":
+          return "1. 손 펴기 대기";
+        case "ARMED_OPEN":
+          return "2. 오므려서 충전 준비";
+        case "CHARGING":
+          return "3. 충전 중 (펴면 발사!)";
+        default:
+          return "대기";
+      }
+    }
+
+    function spawnInkBlast(originX, originY, dirX, dirY, power) {
+      const palette = INK_PALETTES[paletteIndex % INK_PALETTES.length];
+      paletteIndex++;
+
+      const len = Math.hypot(dirX, dirY) || 1;
+      const nx = dirX / len;
+      const ny = dirY / len;
+
+      const speedBase = (980 + power * 780) * (canvas.width / 960);
+
+      // 메인 잉크 탄환 + 보조 잉크 방울들
+      const count = 4 + Math.round(power * 5);
+      for (let i = 0; i < count; i++) {
+        const spread = (i - (count - 1) / 2) * 0.11;
+        const cos = Math.cos(spread);
+        const sin = Math.sin(spread);
+        const vx = (nx * cos - ny * sin) * speedBase * (0.85 + Math.random() * 0.3);
+        const vy = (nx * sin + ny * cos) * speedBase * (0.85 + Math.random() * 0.3);
+
+        inkProjectiles.push({
+          x: originX,
+          y: originY,
+          vx,
+          vy,
+          radius: (i === 0 ? 22 : 13) * (0.75 + power * 0.45) * (canvas.width / 960),
+          palette,
+          power,
+          life: 0,
+          maxLife: 0.42 + Math.random() * 0.14,
+          trail: []
+        });
+      }
+    }
+
+    function explodeInk(x, y, palette, power) {
+      const scale = canvas.width / 960;
+      const burstCount = Math.round(34 + power * 42);
+
+      // 캔버스에 남는 잉크 스플래터 자국
+      inkSplatters.push({
+        x,
+        y,
+        radius: (34 + power * 44) * scale,
+        palette,
+        alpha: 0.55,
+        blobs: Array.from({ length: 9 }, () => {
+          const ang = Math.random() * Math.PI * 2;
+          const distR = (14 + Math.random() * 38) * (0.7 + power * 0.5) * scale;
+          return {
+            ox: Math.cos(ang) * distR,
+            oy: Math.sin(ang) * distR,
+            r: (5 + Math.random() * 14) * scale
+          };
+        })
+      });
+      if (inkSplatters.length > 24) {
+        inkSplatters.shift();
+      }
+
+      // 사방으로 튀는 잉크 파티클
+      for (let i = 0; i < burstCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = (140 + Math.random() * 640) * (0.7 + power * 0.5) * scale;
+        inkParticles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 80 * scale,
+          gravity: 920 * scale,
+          drag: 0.965,
+          radius: (3.5 + Math.random() * 11) * (0.75 + power * 0.45) * scale,
+          palette,
+          alpha: 1,
+          decay: 0.9 + Math.random() * 0.85
+        });
+      }
+    }
+
+    function updateEffects(dt) {
+      // 잉크 탄환 이동 및 전방 폭발
+      for (let i = inkProjectiles.length - 1; i >= 0; i--) {
+        const p = inkProjectiles[i];
+        p.life += dt;
+        p.trail.push({ x: p.x, y: p.y, r: p.radius * 0.85 });
+        if (p.trail.length > 9) p.trail.shift();
+
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.985;
+        p.vy = p.vy * 0.985 + 140 * dt;
+
+        const hitWall =
+          p.x < p.radius ||
+          p.x > canvas.width - p.radius ||
+          p.y < p.radius ||
+          p.y > canvas.height - p.radius;
+
+        if (p.life >= p.maxLife || hitWall) {
+          explodeInk(p.x, p.y, p.palette, p.power);
+          inkProjectiles.splice(i, 1);
+        }
+      }
+
+      // 폭발 파티클 업데이트
+      for (let i = inkParticles.length - 1; i >= 0; i--) {
+        const pt = inkParticles[i];
+        pt.vx *= Math.pow(pt.drag, dt * 60);
+        pt.vy = pt.vy * Math.pow(pt.drag, dt * 60) + pt.gravity * dt;
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+        pt.alpha -= pt.decay * dt;
+        if (pt.alpha <= 0) {
+          inkParticles.splice(i, 1);
+        }
+      }
+
+      // 스플래터 서서히 페이드
+      for (let i = inkSplatters.length - 1; i >= 0; i--) {
+        inkSplatters[i].alpha -= 0.045 * dt;
+        if (inkSplatters[i].alpha <= 0) {
+          inkSplatters.splice(i, 1);
+        }
+      }
+    }
+
+    function drawMirroredVideo() {
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    function drawInkSplatters() {
+      for (const sp of inkSplatters) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, sp.alpha);
+        ctx.fillStyle = sp.palette.core;
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, sp.radius * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (const b of sp.blobs) {
+          ctx.beginPath();
+          ctx.arc(sp.x + b.ox, sp.y + b.oy, b.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    function drawPalmGauge(cx, cy, charge, phase) {
+      const radius = Math.min(canvas.width, canvas.height) * 0.068;
+
+      ctx.save();
+      // 배경 원
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(10, 15, 25, 0.45)";
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.stroke();
+
+      // 충전 호
+      if (charge > 0.01) {
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + Math.PI * 2 * charge;
+        const isReady = charge >= 0.99;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.lineWidth = 7;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = isReady ? "#22c55e" : "#38bdf8";
+        ctx.shadowColor = isReady ? "rgba(34, 197, 94, 0.8)" : "rgba(56, 189, 248, 0.7)";
+        ctx.shadowBlur = 14;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // 중앙 텍스트
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `700 ${Math.max(12, Math.round(radius * 0.42))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (phase === "ARMED_OPEN" && charge < 0.05) {
+        ctx.fillText("오므리기", cx, cy);
+      } else {
+        ctx.fillText(`${Math.round(charge * 100)}%`, cx, cy);
+      }
+
+      // 발사 방향 화살표 가이드 (충전 35% 이상일 때)
+      if (charge >= 0.35) {
+        const len = Math.hypot(handTracker.dirX, handTracker.dirY) || 1;
+        const nx = handTracker.dirX / len;
+        const ny = handTracker.dirY / len;
+        const tipX = cx + nx * (radius + 24);
+        const tipY = cy + ny * (radius + 24);
+
+        ctx.beginPath();
+        ctx.moveTo(cx + nx * (radius + 6), cy + ny * (radius + 6));
+        ctx.lineTo(tipX, tipY);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = charge >= 0.99 ? "#22c55e" : "#facc15";
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawHandOverlay(landmarks) {
+      if (!showLandmarks || !landmarks || landmarks.length === 0) return;
+      const lm = landmarks[0];
+      const pts = lm.map((p) => toCanvasPoint(p.x, p.y));
+
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.75)";
+      for (const [a, b] of HAND_CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(pts[a].x, pts[a].y);
+        ctx.lineTo(pts[b].x, pts[b].y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < pts.length; i++) {
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, i % 4 === 0 ? 5 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = i % 4 === 0 ? "#f43f5e" : "#f8fafc";
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawInkProjectilesAndParticles() {
+      // 잉크 탄환 + 잔상
+      for (const p of inkProjectiles) {
+        ctx.save();
+        for (let t = 0; t < p.trail.length; t++) {
+          const tr = p.trail[t];
+          const alpha = ((t + 1) / p.trail.length) * 0.45;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = p.palette.mid;
+          ctx.beginPath();
+          ctx.arc(tr.x, tr.y, tr.r * ((t + 1) / p.trail.length), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = p.palette.glow;
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = p.palette.core;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 폭발 파티클
+      for (const pt of inkParticles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, pt.alpha);
+        ctx.fillStyle = pt.palette.core;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function processHandGesture(landmarks, dt) {
+      if (handTracker.cooldown > 0) {
+        handTracker.cooldown = Math.max(0, handTracker.cooldown - dt);
+      }
+
+      if (!landmarks || landmarks.length === 0) {
+        // 손이 안 보일 때는 충전량을 천천히 감쇠
+        handTracker.charge = Math.max(0, handTracker.charge - dt * 0.45);
+        if (handTracker.charge === 0 && handTracker.phase === "CHARGING") {
+          handTracker.phase = "ARMED_OPEN";
+        }
+        updateStateBadge(false);
+        updateStepCards();
         return;
       }
 
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "ko-KR";
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+      const lm = landmarks[0];
+      const rawOpen = computeHandOpenness(lm);
+      handTracker.smoothedOpenness += (rawOpen - handTracker.smoothedOpenness) * Math.min(1, dt * 16);
 
-        const koVoice = getKoreanVoice();
-        if (koVoice) {
-          utterance.voice = koVoice;
-        }
+      const palm = getPalmCenter(lm);
+      handTracker.palmX = palm.x;
+      handTracker.palmY = palm.y;
 
-        utterance.onerror = (event) => {
-          if (event.error === "not-allowed") {
-            audioNoticeEl.textContent = "브라우저 자동재생 정책으로 음성이 차단되었습니다. 화면을 한 번 클릭해 주세요.";
+      const palmPt = toCanvasPoint(palm.x, palm.y);
+      const wristPt = toCanvasPoint(lm[0].x, lm[0].y);
+      const midMcpPt = toCanvasPoint(lm[9].x, lm[9].y);
+
+      // 전방 방향: 손목 -> 중지 MCP 벡터 (기본 위쪽 보정)
+      let vx = midMcpPt.x - wristPt.x;
+      let vy = midMcpPt.y - wristPt.y;
+      if (Math.hypot(vx, vy) < 4) {
+        vx = 0;
+        vy = -1;
+      }
+      handTracker.dirX = vx;
+      handTracker.dirY = vy;
+
+      const openVal = handTracker.smoothedOpenness;
+      const isFullyOpen = openVal >= 0.66; // 보자기 모양
+      const isClosed = openVal <= 0.34;    // 주먹/오므림 모양
+
+      if (handTracker.cooldown === 0) {
+        if (handTracker.phase === "IDLE") {
+          if (isFullyOpen) {
+            handTracker.phase = "ARMED_OPEN";
           }
-        };
+        } else if (handTracker.phase === "ARMED_OPEN") {
+          if (isClosed) {
+            handTracker.phase = "CHARGING";
+            handTracker.charge = Math.max(handTracker.charge, 0.08);
+          }
+        } else if (handTracker.phase === "CHARGING") {
+          if (isClosed) {
+            // 오므린 상태에서 게이지 충전 (약 0.9초 내 풀충전)
+            handTracker.charge = Math.min(1, handTracker.charge + dt * 1.15);
+          } else if (isFullyOpen) {
+            // 충전된 상태에서 다시 손을 펴면 전방으로 잉크 발사!
+            if (handTracker.charge >= 0.35) {
+              spawnInkBlast(
+                palmPt.x,
+                palmPt.y,
+                handTracker.dirX,
+                handTracker.dirY,
+                handTracker.charge
+              );
+              handTracker.cooldown = 0.35;
+            }
+            handTracker.charge = 0;
+            // 손을 편 상태이므로 다음 사이클을 위해 ARMED_OPEN 유지
+            handTracker.phase = "ARMED_OPEN";
+          }
+        }
+      }
 
-        utterance.onstart = () => {
-          audioNoticeEl.textContent = "";
-        };
+      // 손바닥 위치에 게이지 표시
+      if (handTracker.phase === "CHARGING" || handTracker.phase === "ARMED_OPEN") {
+        drawPalmGauge(palmPt.x, palmPt.y, handTracker.charge, handTracker.phase);
+      }
 
-        window.speechSynthesis.speak(utterance);
+      updateStateBadge(true);
+      updateStepCards();
+    }
+
+    function renderLoop(nowMs) {
+      const dt = Math.min(0.05, Math.max(0.001, (nowMs - lastFrameMs) / 1000));
+      lastFrameMs = nowMs;
+
+      syncCanvasSize();
+      drawMirroredVideo();
+      drawInkSplatters();
+
+      let results = null;
+      if (handLandmarker && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        results = handLandmarker.detectForVideo(video, nowMs);
+      }
+
+      const landmarks = results?.landmarks || null;
+      drawHandOverlay(landmarks);
+      processHandGesture(landmarks, dt);
+      updateEffects(dt);
+      drawInkProjectilesAndParticles();
+
+      rafId = requestAnimationFrame(renderLoop);
+    }
+
+    async function initApp() {
+      if (rafId) cancelAnimationFrame(rafId);
+      showOverlay(
+        "전면 카메라 및 손 인식 모델 준비 중",
+        "카메라 권한을 허용해 주세요. 손가락 관절을 실시간으로 추적합니다."
+      );
+      try {
+        await initHandLandmarker();
+        await initWebcam();
+        hideOverlay();
+        setStatus("ready", "실시간 손 인식 작동 중");
+        lastFrameMs = performance.now();
+        rafId = requestAnimationFrame(renderLoop);
       } catch (err) {
-        console.error("Speech error:", err);
+        console.error(err);
+        setStatus("error", "초기화 실패");
+        showOverlay(
+          "카메라 또는 모델을 불러올 수 없습니다",
+          err?.message || "브라우저 카메라 권한을 확인하거나 HTTPS / localhost 환경에서 실행해 주세요.",
+          true
+        );
       }
     }
 
-    function buildBars(classLabels) {
-      barsContainerEl.innerHTML = "";
-      barElements.clear();
-
-      classLabels.forEach((rawLabel) => {
-        const cleanLabel = normalizeLabel(rawLabel);
-
-        const item = document.createElement("div");
-        item.className = "bar-item";
-
-        const header = document.createElement("div");
-        header.className = "bar-header";
-
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = `[${cleanLabel}]`;
-
-        const pctSpan = document.createElement("span");
-        pctSpan.textContent = "0.0%";
-
-        header.appendChild(nameSpan);
-        header.appendChild(pctSpan);
-
-        const track = document.createElement("div");
-        track.className = "bar-track";
-
-        const fill = document.createElement("div");
-        fill.className = "bar-fill";
-
-        track.appendChild(fill);
-        item.appendChild(header);
-        item.appendChild(track);
-        barsContainerEl.appendChild(item);
-
-        barElements.set(cleanLabel, { pctSpan, fill });
-      });
-    }
-
-    function updateBars(predictions, activeConfirmedState) {
-      predictions.forEach((pred) => {
-        const cleanLabel = normalizeLabel(pred.className);
-        const prob = Number.isFinite(pred.probability) ? pred.probability : 0;
-        const pct = (prob * 100).toFixed(1);
-
-        const ui = barElements.get(cleanLabel);
-        if (ui) {
-          ui.pctSpan.textContent = `${pct}%`;
-          ui.fill.style.width = `${Math.min(100, Math.max(0, prob * 100))}%`;
-          if (cleanLabel === activeConfirmedState) {
-            ui.fill.classList.add("confirmed");
-          } else {
-            ui.fill.classList.remove("confirmed");
-          }
-        }
-      });
-    }
-
-    function applyConfirmedState(newState) {
-      const prevConfirmed = confirmedState;
-      confirmedState = newState;
-
-      const action = LABEL_ACTIONS[newState] || {
-        displayText: `인식된 상태: [${newState}]`,
-        speakText: null,
-        isGreeting: false
-      };
-
-      stateSubEl.textContent =
-        newState === "배경"
-          ? "현재 확정 상태: [배경] (사람 없음)"
-          : `현재 확정 상태: [${newState}]`;
-
-      greetingDisplayEl.textContent = action.displayText;
-
-      // 이전 확정 상태와 다른 상태로 바뀔 때만 1회 발화 ([배경]은 인사말 없음)
-      if (newState !== prevConfirmed) {
-        if (newState === "배경") {
-          lastSpokenState = "배경";
-          lastSpokenEl.textContent = "마지막 음성: 없음 (배경)";
-        } else if (action.speakText && newState !== lastSpokenState) {
-          speakKorean(action.speakText);
-          lastSpokenState = newState;
-          lastSpokenEl.textContent = `마지막 음성: [${newState}]`;
-        }
-      }
-    }
-
-    function processStability(predictions) {
-      let topPred = predictions[0];
-      for (let i = 1; i < predictions.length; i++) {
-        if (predictions[i].probability > topPred.probability) {
-          topPred = predictions[i];
-        }
-      }
-
-      const topLabel = normalizeLabel(topPred.className);
-      const topProb = topPred.probability;
-
-      if (topProb >= CONFIDENCE_THRESHOLD) {
-        if (candidateState === topLabel) {
-          consecutiveCount += 1;
-        } else {
-          candidateState = topLabel;
-          consecutiveCount = 1;
-        }
-
-        if (consecutiveCount >= REQUIRED_CONSECUTIVE_FRAMES) {
-          applyConfirmedState(topLabel);
-        }
-      } else {
-        candidateState = null;
-        consecutiveCount = 0;
-      }
-
-      candidateInfoEl.textContent = candidateState
-        ? `후보: [${candidateState}] (${Math.min(consecutiveCount, REQUIRED_CONSECUTIVE_FRAMES)}/${REQUIRED_CONSECUTIVE_FRAMES})`
-        : `후보: 기준 미달 (< ${Math.round(CONFIDENCE_THRESHOLD * 100)}%)`;
-    }
-
-    async function loop() {
-      if (!webcam || !model) return;
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-      processStability(prediction);
-      updateBars(prediction, confirmedState);
-    }
-
-    async function init() {
-      try {
-        const modelURL = MODEL_URL + "model.json";
-        const metadataURL = MODEL_URL + "metadata.json";
-
-        model = await tmImage.load(modelURL, metadataURL);
-        const classLabels = model.getClassLabels();
-        buildBars(classLabels);
-
-        const flip = true;
-        webcam = new tmImage.Webcam(360, 360, flip);
-        await webcam.setup();
-        await webcam.play();
-
-        webcamContainerEl.innerHTML = "";
-        webcamContainerEl.appendChild(webcam.canvas);
-
-        badgeEl.textContent = "실시간 인식 중";
-        badgeEl.classList.add("active");
-
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.getVoices();
-        }
-
-        window.requestAnimationFrame(loop);
-      } catch (error) {
-        console.error("초기화 실패:", error);
-        badgeEl.textContent = "시작 오류";
-        webcamContainerEl.textContent = "웹캠 또는 모델을 불러오지 못했습니다. 카메라 권한과 로컬 서버 실행 여부를 확인해 주세요.";
-      }
-    }
-
-    window.addEventListener("DOMContentLoaded", init);
+    initApp();
   </script>
 </body>
 </html>
