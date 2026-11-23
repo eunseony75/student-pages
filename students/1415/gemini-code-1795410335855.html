@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>실시간 얼굴 인식 인사말 웹앱</title>
+  <title>티쳐블머신 실시간 인식 &amp; 한국어 음성 안내</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -14,7 +14,7 @@
       --border: #334155;
       --accent: #38bdf8;
       --me: #22c55e;
-      --hello: #f59e0b;
+      --friend: #f59e0b;
       --both: #c084fc;
     }
 
@@ -138,8 +138,8 @@
       color: var(--me);
     }
 
-    .greeting-msg.hello {
-      color: var(--hello);
+    .greeting-msg.friend {
+      color: var(--friend);
     }
 
     .greeting-msg.both {
@@ -221,7 +221,7 @@
 <body>
   <div class="app">
     <div class="header">
-      <h1>실시간 얼굴 인식 인사말 웹앱</h1>
+      <h1>실시간 얼굴 인식 &amp; 한국어 음성 안내</h1>
       <div id="status-pill" class="status-pill">자동 시작 준비 중...</div>
     </div>
 
@@ -240,7 +240,7 @@
         <div id="bars-container"></div>
 
         <div class="helper">
-          • 모델 URL: <code>https://teachablemachine.withgoogle.com/models/OOOOOOOO/</code><br />
+          • 모델 URL: <code>https://teachablemachine.withgoogle.com/models/XLD4neOoe/</code><br />
           • 확정 조건: 확신도 <strong>75% 이상</strong>이 <strong>6프레임 연속</strong> 유지될 때 상태 변경<br />
           • 상태가 바뀔 때만 한국어 음성(<code>ko-KR</code>)을 1회 재생합니다. (<code>[배경]</code>은 무음/인사말 없음)<br />
           • 브라우저 정책상 첫 음성이 막히면 화면을 한 번 클릭해 주세요.
@@ -253,7 +253,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
   <script>
-    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/OOOOOOOO/";
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/XLD4neOoe/";
 
     // 흔들림 방지를 위한 확신도 및 연속 프레임 기준
     const CONFIDENCE_THRESHOLD = 0.75;
@@ -266,10 +266,10 @@
         speech: "안녕하세요?",
         className: "greeting-msg me"
       },
-      "안녕하세요": {
-        text: "안녕하세요!",
-        speech: "안녕하세요!",
-        className: "greeting-msg hello"
+      "친구": {
+        text: "누구세요?",
+        speech: "누구세요?",
+        className: "greeting-msg friend"
       },
       "둘다": {
         text: "둘이 같이왔네요!",
