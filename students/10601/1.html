@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediaPipe 실시간 손 인식 전기 충전 &amp; 전방 전기 발사</title>
+  <title>MediaPipe 실시간 손 인식 노란 전기 충전 &amp; 전방 발사</title>
   <style>
     :root {
       --bg: #050814;
-      --panel: rgba(15, 23, 42, 0.8);
-      --border: rgba(56, 189, 248, 0.35);
+      --panel: rgba(15, 23, 42, 0.82);
+      --border: rgba(250, 204, 21, 0.42);
       --text: #f8fafc;
-      --neon-blue: #38bdf8;
-      --neon-cyan: #22d3ee;
+      --neon-yellow: #facc15;
+      --neon-gold: #fde047;
     }
 
     * {
@@ -51,7 +51,7 @@
     .hud-title {
       font-size: 1.05rem;
       font-weight: 700;
-      color: var(--neon-cyan);
+      color: var(--neon-gold);
     }
 
     .hud-steps {
@@ -62,9 +62,9 @@
     .status-pill {
       padding: 6px 12px;
       border-radius: 999px;
-      background: rgba(56, 189, 248, 0.14);
-      border: 1px solid rgba(56, 189, 248, 0.4);
-      color: var(--neon-blue);
+      background: rgba(250, 204, 21, 0.16);
+      border: 1px solid rgba(250, 204, 21, 0.48);
+      color: var(--neon-gold);
       font-size: 0.85rem;
       font-weight: 700;
     }
@@ -78,7 +78,7 @@
       border: 1px solid var(--border);
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 0 40px rgba(34, 211, 238, 0.15);
+      box-shadow: 0 0 40px rgba(250, 204, 21, 0.16);
     }
 
     video {
@@ -103,9 +103,9 @@
 <body>
   <div class="hud">
     <div>
-      <div class="hud-title">HAND ELECTRIC CHARGE &amp; BOLT CANNON</div>
+      <div class="hud-title">HAND YELLOW ELECTRIC CHARGE &amp; BOLT CANNON</div>
       <div class="hud-steps">
-        1) 손 펼치기 → 2) 손 오므리기(손바닥 전기 충전) → 3) 다시 펴기(전방 굵은 전기 발사)
+        1) 손 펼치기 → 2) 손 오므리기(손바닥 노란 전기 충전) → 3) 다시 펴기(전방 굵은 노란 전기 발사)
       </div>
     </div>
     <div id="phaseBadge" class="status-pill">카메라 및 모델 로딩 중...</div>
@@ -130,13 +130,9 @@
     const phaseBadge = document.getElementById("phaseBadge");
     const errorBox = document.getElementById("errorBox");
 
-    // 시퀀스 상태:
-    // "IDLE" -> 손을 펼치면 "READY_OPEN"
-    // "READY_OPEN" -> 손을 오므리면 "CHARGING"
-    // "CHARGING" -> 충전 중 손을 다시 펴면 전방 전기 발사 후 "READY_OPEN"
     let sequenceState = "IDLE";
-    let chargeLevel = 0; // 0.0 ~ 1.0
-    let boltTimer = 0;   // 전기 발사 지속 타이머 (초)
+    let chargeLevel = 0;
+    let boltTimer = 0;
     let boltOrigin = { x: 0, y: 0 };
     let boltDir = { x: 0, y: -1 };
     let handDetected = false;
@@ -241,7 +237,7 @@
               radius: 1.8 + Math.random() * 2.5,
               alpha: 1,
               decay: 2.6,
-              color: Math.random() < 0.5 ? "#38bdf8" : "#a5f3fc"
+              color: Math.random() < 0.5 ? "#facc15" : "#fef08a"
             });
           }
         } else if (openFrames >= REQUIRED_FRAMES) {
@@ -249,7 +245,7 @@
             boltTimer = 0.65 + chargeLevel * 0.45;
             boltOrigin = { ...palmCanvasPos };
             boltDir = { ...aimDir };
-            spawnSparks(palmCanvasPos.x, palmCanvasPos.y, 44, "#22d3ee", 120, 480);
+            spawnSparks(palmCanvasPos.x, palmCanvasPos.y, 44, "#fde047", 120, 480);
           }
           sequenceState = "READY_OPEN";
           chargeLevel = 0;
@@ -257,7 +253,6 @@
       }
     }
 
-    // 지그재그 전기 아크 경로 생성
     function buildLightningPoints(x1, y1, x2, y2, segments, jitterAmp) {
       const pts = [{ x: x1, y: y1 }];
       const dx = x2 - x1;
@@ -268,7 +263,7 @@
 
       for (let i = 1; i < segments; i++) {
         const t = i / segments;
-        const envelope = Math.sin(t * Math.PI); // 양 끝점 고정, 중간에 크게 출렁임
+        const envelope = Math.sin(t * Math.PI);
         const offset = (Math.random() * 2 - 1) * jitterAmp * envelope;
         pts.push({
           x: x1 + dx * t + nx * offset,
@@ -297,7 +292,6 @@
       ctx.stroke();
     }
 
-    // 손바닥 전기 충전 애니메이션
     function drawPalmElectricity(x, y, level, timeSec) {
       if (level <= 0.01) return;
 
@@ -309,19 +303,17 @@
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      // 중심 전기 글로우
       const glow = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius * 2.1);
-      glow.addColorStop(0, "rgba(240, 249, 255, 0.95)");
-      glow.addColorStop(0.3, "rgba(56, 189, 248, 0.8)");
-      glow.addColorStop(0.7, "rgba(34, 211, 238, 0.25)");
-      glow.addColorStop(1, "rgba(14, 165, 233, 0)");
+      glow.addColorStop(0, "rgba(255, 253, 224, 0.96)");
+      glow.addColorStop(0.3, "rgba(250, 204, 21, 0.85)");
+      glow.addColorStop(0.7, "rgba(234, 179, 8, 0.28)");
+      glow.addColorStop(1, "rgba(202, 138, 4, 0)");
 
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(x, y, radius * 2.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // 손바닥 주변으로 감기는 지그재그 전기 방전
       const arcCount = 4 + Math.floor(level * 6);
       for (let i = 0; i < arcCount; i++) {
         const a1 = (Math.PI * 2 * i) / arcCount + timeSec * 4;
@@ -339,8 +331,8 @@
         const pts = [p1, mid, p2];
         strokeLightningPath(
           pts,
-          "rgba(56, 189, 248, 0.85)",
-          "#e0f2fe",
+          "rgba(250, 204, 21, 0.88)",
+          "#fef9c3",
           3 + level * 3,
           1.2 + level * 1.2
         );
@@ -349,7 +341,6 @@
       ctx.restore();
     }
 
-    // 전방 굵은 전기 발사 애니메이션
     function drawForwardElectricityBolt(origin, dir, intensity, timeSec) {
       if (intensity <= 0) return;
 
@@ -367,7 +358,6 @@
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      // 1) 굵은 전방 전기 코어 기둥 (지그재그)
       const mainPts = buildLightningPoints(
         origin.x,
         origin.y,
@@ -378,20 +368,19 @@
       );
       strokeLightningPath(
         mainPts,
-        `rgba(14, 165, 233, ${0.42 * alphaScale})`,
-        `rgba(56, 189, 248, ${0.9 * alphaScale})`,
+        `rgba(234, 179, 8, ${0.45 * alphaScale})`,
+        `rgba(250, 204, 21, ${0.92 * alphaScale})`,
         mainWidth * 2.1,
         mainWidth
       );
       strokeLightningPath(
         mainPts,
-        `rgba(186, 230, 253, ${0.95 * alphaScale})`,
+        `rgba(254, 240, 138, ${0.95 * alphaScale})`,
         `rgba(255, 255, 255, ${alphaScale})`,
         mainWidth * 0.55,
         mainWidth * 0.25
       );
 
-      // 2) 병렬 보조 전기 줄기 2개
       for (const side of [-1, 1]) {
         const spread = side * (16 + intensity * 22);
         const subPts = buildLightningPoints(
@@ -404,14 +393,13 @@
         );
         strokeLightningPath(
           subPts,
-          `rgba(34, 211, 238, ${0.65 * alphaScale})`,
-          `rgba(224, 242, 254, ${0.9 * alphaScale})`,
+          `rgba(253, 224, 71, ${0.68 * alphaScale})`,
+          `rgba(254, 249, 195, ${0.92 * alphaScale})`,
           mainWidth * 0.55,
           mainWidth * 0.2
         );
       }
 
-      // 3) 메인 줄기에서 사방으로 뻗어나가는 분기 번개
       for (let i = 3; i < mainPts.length - 2; i += 3) {
         const anchor = mainPts[i];
         const branchSide = (i % 6 === 0 ? 1 : -1) + (Math.random() - 0.5) * 0.7;
@@ -421,19 +409,18 @@
         const branchPts = buildLightningPoints(anchor.x, anchor.y, bx, by, 6, 14);
         strokeLightningPath(
           branchPts,
-          `rgba(56, 189, 248, ${0.7 * alphaScale})`,
-          `rgba(240, 249, 255, ${0.9 * alphaScale})`,
+          `rgba(250, 204, 21, ${0.72 * alphaScale})`,
+          `rgba(255, 253, 224, ${0.92 * alphaScale})`,
           6 * alphaScale,
           2 * alphaScale
         );
       }
 
-      // 4) 발사 지점 전기 폭발 플래시
       const flashR = (38 + intensity * 45) * (1 + Math.sin(timeSec * 50) * 0.12);
       const flashGrad = ctx.createRadialGradient(origin.x, origin.y, 4, origin.x, origin.y, flashR);
       flashGrad.addColorStop(0, `rgba(255, 255, 255, ${alphaScale})`);
-      flashGrad.addColorStop(0.4, `rgba(56, 189, 248, ${0.85 * alphaScale})`);
-      flashGrad.addColorStop(1, "rgba(14, 165, 233, 0)");
+      flashGrad.addColorStop(0.4, `rgba(250, 204, 21, ${0.88 * alphaScale})`);
+      flashGrad.addColorStop(1, "rgba(234, 179, 8, 0)");
 
       ctx.fillStyle = flashGrad;
       ctx.beginPath();
@@ -468,9 +455,9 @@
 
     function updateBadgeText() {
       if (boltTimer > 0) {
-        phaseBadge.textContent = "전방 굵은 전기 발사!";
+        phaseBadge.textContent = "전방 굵은 노란 전기 발사!";
       } else if (sequenceState === "CHARGING") {
-        phaseBadge.textContent = `손바닥 전기 충전 중 (${Math.round(chargeLevel * 100)}%) — 펴서 발사!`;
+        phaseBadge.textContent = `손바닥 노란 전기 충전 중 (${Math.round(chargeLevel * 100)}%) — 펴서 발사!`;
       } else if (sequenceState === "READY_OPEN") {
         phaseBadge.textContent = "손 펼침 확인 — 손을 오므려 전기를 충전하세요";
       } else if (handDetected) {
