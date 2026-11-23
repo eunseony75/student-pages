@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediaPipe 네온 에너지 구체 &amp; 레이저 빔 웹앱</title>
+  <title>네온 레이저 귀신 퇴치 웹앱 (MediaPipe)</title>
   <style>
     :root {
       --bg: #050811;
-      --panel: rgba(13, 20, 36, 0.78);
-      --border: rgba(56, 189, 248, 0.25);
+      --panel: rgba(11, 18, 34, 0.8);
+      --border: rgba(56, 189, 248, 0.28);
       --text: #f8fafc;
       --muted: #94a3b8;
       --neon: #38bdf8;
-      --neon-bright: #a5f3fc;
+      --neon-bright: #bae6fd;
+      --ghost: #c084fc;
     }
 
     * {
@@ -37,7 +38,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at 50% 35%, #0c1933 0%, var(--bg) 72%);
+      background: radial-gradient(circle at 50% 30%, #121836 0%, var(--bg) 74%);
     }
 
     .stage {
@@ -60,7 +61,7 @@
       height: 100%;
       object-fit: cover;
       border-radius: 16px;
-      box-shadow: 0 0 50px rgba(2, 132, 199, 0.18);
+      box-shadow: 0 0 55px rgba(56, 189, 248, 0.2);
     }
 
     .hud-top {
@@ -85,14 +86,14 @@
     }
 
     .hud-title {
-      font-size: 0.95rem;
+      font-size: 0.96rem;
       font-weight: 700;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .status-dot {
+    .dot {
       width: 9px;
       height: 9px;
       border-radius: 50%;
@@ -100,19 +101,19 @@
       box-shadow: 0 0 10px #f59e0b;
     }
 
-    .status-dot.ready {
+    .dot.ready {
       background: #38bdf8;
       box-shadow: 0 0 12px #38bdf8;
     }
 
-    .status-dot.charging {
+    .dot.charging {
       background: #22d3ee;
       box-shadow: 0 0 16px #22d3ee;
     }
 
-    .status-dot.firing {
+    .dot.firing {
       background: #ffffff;
-      box-shadow: 0 0 20px #38bdf8;
+      box-shadow: 0 0 22px #38bdf8;
     }
 
     .hud-sub {
@@ -121,11 +122,44 @@
       color: var(--muted);
     }
 
-    .charge-box {
-      min-width: 210px;
+    .right-huds {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
-    .charge-header {
+    .stats-box {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat span {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .stat strong {
+      font-size: 1.08rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--neon-bright);
+    }
+
+    .stat strong.ghost-stat {
+      color: var(--ghost);
+    }
+
+    .charge-box {
+      min-width: 195px;
+    }
+
+    .charge-head {
       display: flex;
       justify-content: space-between;
       font-size: 0.8rem;
@@ -133,11 +167,11 @@
       margin-bottom: 6px;
     }
 
-    .charge-header strong {
+    .charge-head strong {
       color: var(--neon-bright);
     }
 
-    .charge-bar {
+    .charge-track {
       width: 100%;
       height: 9px;
       background: rgba(15, 23, 42, 0.9);
@@ -149,7 +183,7 @@
     .charge-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #2563eb, #38bdf8, #a5f3fc);
+      background: linear-gradient(90deg, #2563eb, #38bdf8, #bae6fd);
       box-shadow: 0 0 12px #38bdf8;
       transition: width 0.06s linear;
     }
@@ -185,25 +219,42 @@
       <div class="hud-top">
         <div class="hud-card">
           <div class="hud-title">
-            <span id="status-dot" class="status-dot"></span>
-            <span id="phase-label">카메라 및 모델 로딩 중...</span>
+            <span id="status-dot" class="dot"></span>
+            <span id="phase-label">전면 카메라 및 HandLandmarker 로딩 중...</span>
           </div>
-          <div id="detail-label" class="hud-sub">손 펼침도: 0% · 손목 기준 추적</div>
+          <div id="detail-label" class="hud-sub">손 펼침도: 0% · 레이저로 귀신을 정화하세요</div>
         </div>
 
-        <div class="hud-card charge-box">
-          <div class="charge-header">
-            <span>네온 에너지 충전</span>
-            <strong id="charge-percent">0%</strong>
+        <div class="right-huds">
+          <div class="hud-card stats-box">
+            <div class="stat">
+              <span>점수</span>
+              <strong id="score-val">0</strong>
+            </div>
+            <div class="stat">
+              <span>퇴치</span>
+              <strong id="kills-val" class="ghost-stat">0</strong>
+            </div>
+            <div class="stat">
+              <span>콤보</span>
+              <strong id="combo-val">0x</strong>
+            </div>
           </div>
-          <div class="charge-bar">
-            <div id="charge-fill" class="charge-fill"></div>
+
+          <div class="hud-card charge-box">
+            <div class="charge-head">
+              <span>네온 에너지 구체</span>
+              <strong id="charge-val">0%</strong>
+            </div>
+            <div class="charge-track">
+              <div id="charge-fill" class="charge-fill"></div>
+            </div>
           </div>
         </div>
       </div>
 
       <div id="guide-pill" class="hud-bottom">
-        <span>1단계</span> 손을 펴서 준비 → <span>2단계</span> 손을 오므려 파란 구체 충전 → <span>3단계</span> 다시 펴서 레이저 발사!
+        <span>1단계</span> 손 펴기 → <span>2단계</span> 오므려 파란 구체 충전 → <span>3단계</span> 다시 펴서 레이저로 귀신 격파!
       </div>
     </div>
   </div>
@@ -221,518 +272,31 @@
     const statusDotEl = document.getElementById("status-dot");
     const phaseLabelEl = document.getElementById("phase-label");
     const detailLabelEl = document.getElementById("detail-label");
-    const chargePercentEl = document.getElementById("charge-percent");
+    const scoreValEl = document.getElementById("score-val");
+    const killsValEl = document.getElementById("kills-val");
+    const comboValEl = document.getElementById("combo-val");
+    const chargeValEl = document.getElementById("charge-val");
     const chargeFillEl = document.getElementById("charge-fill");
     const guidePillEl = document.getElementById("guide-pill");
 
-    // 손 펼침도 임계값 (0.0 = 완전히 오므림, 1.0 = 활짝 폄)
     const OPEN_THRESHOLD = 0.64;
     const CLOSED_THRESHOLD = 0.36;
-    const MIN_CHARGE_TO_FIRE = 0.28;
+    const MIN_CHARGE_TO_FIRE = 0.25;
     const BEAM_DURATION_MS = 680;
+    const MAX_GHOSTS = 7;
 
-    // 상태 머신:
-    // "IDLE"       : 초기/대기 (손을 펴면 ARMED_OPEN으로 전환)
-    // "ARMED_OPEN" : 손을 편 상태 (오므리면 CHARGING으로 전환)
-    // "CHARGING"   : 손을 오므려 파란 네온 구체 충전 중 (다시 펴면 FIRING)
-    // "FIRING"     : 레이저 빔 발사 중
+    // 상태 머신: IDLE -> ARMED_OPEN -> CHARGING -> FIRING
     let state = "IDLE";
-    let charge = 0; // 0.0 ~ 1.0
+    let charge = 0;
     let fireStartTime = 0;
     let beamOrigin = { x: 0, y: 0 };
     let beamDir = { x: 0, y: -1 };
-    let beamPower = 1.0;
-
-    let handLandmarker = null;
-    let lastVideoTime = -1;
-    let lastFrameTime = performance.now();
-    let smoothedOpenness = 0.5;
-    let lastPalmPos = null;
-
-    const sparks = [];
-    const shockwaves = [];
-
-    const HAND_CONNECTIONS = [
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      [0, 5], [5, 6], [6, 7], [7, 8],
-      [5, 9], [9, 10], [10, 11], [11, 12],
-      [9, 13], [13, 14], [14, 15], [15, 16],
-      [13, 17], [17, 18], [18, 19], [19, 20],
-      [0, 17]
-    ];
-
-    function dist(a, b) {
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    // 손목(0) ~ 중지 MCP(9) 길이를 기준 스케일로 사용해 손가락 끝(4,8,12,16,20) 펼침 정도 계산
-    function computeHandOpenness(landmarks) {
-      const wrist = landmarks[0];
-      const middleMcp = landmarks[9];
-      const palmScale = Math.max(dist(wrist, middleMcp), 0.04);
-
-      const tips = [4, 8, 12, 16, 20];
-      const avgTipDist =
-        tips.reduce((acc, idx) => acc + dist(wrist, landmarks[idx]), 0) / tips.length;
-
-      // 오므렸을 때 약 ~0.85 * palmScale, 활짝 폈을 때 약 ~2.05 * palmScale
-      const normalized = (avgTipDist / palmScale - 0.9) / 1.05;
-      return Math.max(0, Math.min(1, normalized));
-    }
-
-    // 손바닥 중심 좌표 (캔버스 픽셀 좌표, 전면 카메라 좌우 반전 반영)
-    function getPalmCenterPx(landmarks) {
-      const wrist = landmarks[0];
-      const middleMcp = landmarks[9];
-      const indexMcp = landmarks[5];
-      const pinkyMcp = landmarks[17];
-
-      const nx = (wrist.x * 0.35 + middleMcp.x * 0.35 + indexMcp.x * 0.15 + pinkyMcp.x * 0.15);
-      const ny = (wrist.y * 0.35 + middleMcp.y * 0.35 + indexMcp.y * 0.15 + pinkyMcp.y * 0.15);
-
-      return {
-        x: (1 - nx) * canvasEl.width,
-        y: ny * canvasEl.height
-      };
-    }
-
-    // 손바닥에서 뻗어나가는 전방 벡터 계산
-    function getForwardDirection(landmarks) {
-      const wristPx = {
-        x: (1 - landmarks[0].x) * canvasEl.width,
-        y: landmarks[0].y * canvasEl.height
-      };
-      const midMcpPx = {
-        x: (1 - landmarks[9].x) * canvasEl.width,
-        y: landmarks[9].y * canvasEl.height
-      };
-      const midTipPx = {
-        x: (1 - landmarks[12].x) * canvasEl.width,
-        y: landmarks[12].y * canvasEl.height
-      };
-
-      // 손목 -> 중지 끝 방향과 위쪽 전방 성분을 조합해 자연스러운 전방 빔 방향 산출
-      let dx = midTipPx.x - wristPx.x;
-      let dy = midTipPx.y - wristPx.y;
-      if (Math.abs(dy) < 20 && Math.abs(dx) < 20) {
-        dx = midMcpPx.x - wristPx.x;
-        dy = midMcpPx.y - wristPx.y - 120;
-      }
-      const len = Math.hypot(dx, dy) || 1;
-      return { x: dx / len, y: dy / len };
-    }
-
-    function spawnSparks(x, y, count, color = "#38bdf8", speedScale = 1) {
-      for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = (1.5 + Math.random() * 5.5) * speedScale;
-        sparks.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1,
-          decay: 0.025 + Math.random() * 0.035,
-          size: 1.8 + Math.random() * 3.2,
-          color
-        });
-      }
-    }
-
-    function updateStateMachine(openness, palmPos, landmarks, dtSec, now) {
-      if (state === "FIRING") {
-        const elapsed = now - fireStartTime;
-        if (elapsed >= BEAM_DURATION_MS) {
-          charge = 0;
-          state = openness >= OPEN_THRESHOLD ? "ARMED_OPEN" : "IDLE";
-        }
-      }
-
-      if (state === "IDLE") {
-        if (openness >= OPEN_THRESHOLD) {
-          state = "ARMED_OPEN";
-        }
-      } else if (state === "ARMED_OPEN") {
-        // 편 상태에서 손을 오므리면 파란 에너지 구체 충전 시작
-        if (openness <= CLOSED_THRESHOLD) {
-          state = "CHARGING";
-          charge = Math.max(charge, 0.12);
-          shockwaves.push({
-            x: palmPos.x,
-            y: palmPos.y,
-            radius: 10,
-            maxRadius: 75,
-            alpha: 0.9,
-            color: "#38bdf8"
-          });
-        }
-      } else if (state === "CHARGING") {
-        // 오므린 상태를 유지할수록 충전량 증가
-        const chargeRate = openness < 0.5 ? 0.85 : 0.35;
-        charge = Math.min(1, charge + chargeRate * dtSec);
-
-        if (Math.random() < 0.75) {
-          const angle = Math.random() * Math.PI * 2;
-          const distFromPalm = 36 + Math.random() * 44;
-          sparks.push({
-            x: palmPos.x + Math.cos(angle) * distFromPalm,
-            y: palmPos.y + Math.sin(angle) * distFromPalm,
-            vx: -Math.cos(angle) * (2.6 + charge * 2.5),
-            vy: -Math.sin(angle) * (2.6 + charge * 2.5),
-            life: 1,
-            decay: 0.04,
-            size: 2 + charge * 2.5,
-            color: Math.random() > 0.3 ? "#38bdf8" : "#a5f3fc"
-          });
-        }
-
-        // 충전된 상태에서 손을 다시 펴면 레이저 빔 발사!
-        if (openness >= OPEN_THRESHOLD && charge >= MIN_CHARGE_TO_FIRE) {
-          state = "FIRING";
-          fireStartTime = now;
-          beamPower = Math.max(0.45, charge);
-          beamOrigin = { x: palmPos.x, y: palmPos.y };
-          beamDir = getForwardDirection(landmarks);
-
-          shockwaves.push({
-            x: palmPos.x,
-            y: palmPos.y,
-            radius: 14,
-            maxRadius: 150 * beamPower,
-            alpha: 1,
-            color: "#a5f3fc"
-          });
-          spawnSparks(palmPos.x, palmPos.y, 28, "#38bdf8", 1.6 * beamPower);
-        } else if (openness >= OPEN_THRESHOLD && charge < MIN_CHARGE_TO_FIRE) {
-          // 충분한 충전 전에 손을 펴면 다시 충전 대기 상태로 복귀
-          charge = 0;
-          state = "ARMED_OPEN";
-        }
-      }
-
-      updateHud(openness);
-    }
-
-    function updateHud(openness) {
-      const pct = Math.round(charge * 100);
-      chargePercentEl.textContent = `${pct}%`;
-      chargeFillEl.style.width = `${pct}%`;
-      detailLabelEl.textContent = `손 펼침도: ${Math.round(openness * 100)}% · 전면 카메라 추적 중`;
-
-      statusDotEl.className = "status-dot";
-      if (state === "IDLE") {
-        phaseLabelEl.textContent = "대기 중 — 손을 활짝 펴세요";
-        guidePillEl.innerHTML = "<span>1단계</span> 손바닥을 활짝 펴서 발사 준비를 하세요.";
-      } else if (state === "ARMED_OPEN") {
-        statusDotEl.classList.add("ready");
-        phaseLabelEl.textContent = "발사 준비 완료 — 손을 오므려 충전하세요";
-        guidePillEl.innerHTML = "<span>2단계</span> 손을 오므리면 손바닥에 <span>파란 네온 구체</span>가 충전됩니다.";
-      } else if (state === "CHARGING") {
-        statusDotEl.classList.add("charging");
-        phaseLabelEl.textContent = `파란 네온 에너지 충전 중 (${pct}%)`;
-        guidePillEl.innerHTML = "<span>3단계</span> 에너지가 모였을 때 <span>손을 펴면 레이저 빔</span>이 발사됩니다!";
-      } else if (state === "FIRING") {
-        statusDotEl.classList.add("firing");
-        phaseLabelEl.textContent = "네온 레이저 빔 발사!";
-        guidePillEl.innerHTML = "<span>발사!</span> 다시 손을 오므리거나 펴서 다음 공격을 준비하세요.";
-      }
-    }
-
-    function drawMirroredVideo() {
-      ctx.save();
-      ctx.translate(canvasEl.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-      ctx.restore();
-
-      // 어두운 네온 배경 톤 오버레이
-      ctx.fillStyle = "rgba(5, 10, 24, 0.34)";
-      ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
-    }
-
-    function drawHandSkeleton(landmarks) {
-      const pts = landmarks.map((lm) => ({
-        x: (1 - lm.x) * canvasEl.width,
-        y: lm.y * canvasEl.height
-      }));
-
-      ctx.save();
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.42)";
-      ctx.lineWidth = 2;
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 8;
-
-      for (const [a, b] of HAND_CONNECTIONS) {
-        ctx.beginPath();
-        ctx.moveTo(pts[a].x, pts[a].y);
-        ctx.lineTo(pts[b].x, pts[b].y);
-        ctx.stroke();
-      }
-
-      for (const p of pts) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#bae6fd";
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    function drawNeonEnergyOrb(x, y, amount, now) {
-      const pulse = 1 + Math.sin(now * 0.015) * 0.08;
-      const baseRadius = (16 + amount * 46) * pulse;
-
-      ctx.save();
-      ctx.translate(x, y);
-
-      // 외부 네온 아우라
-      const outerGrad = ctx.createRadialGradient(0, 0, baseRadius * 0.1, 0, 0, baseRadius * 2.2);
-      outerGrad.addColorStop(0, "rgba(224, 242, 254, 0.95)");
-      outerGrad.addColorStop(0.25, "rgba(56, 189, 248, 0.85)");
-      outerGrad.addColorStop(0.6, "rgba(29, 78, 216, 0.35)");
-      outerGrad.addColorStop(1, "rgba(29, 78, 216, 0)");
-
-      ctx.fillStyle = outerGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, baseRadius * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 회전하는 네온 에너지 링
-      ctx.rotate(now * 0.004);
-      ctx.strokeStyle = "#7dd3fc";
-      ctx.lineWidth = 2.5 + amount * 2;
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 18;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, baseRadius * 1.25, baseRadius * 0.55, 0.4, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.ellipse(0, 0, baseRadius * 0.55, baseRadius * 1.25, -0.5, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 밝은 코어 구체
-      const coreGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, baseRadius * 0.72);
-      coreGrad.addColorStop(0, "#ffffff");
-      coreGrad.addColorStop(0.45, "#a5f3fc");
-      coreGrad.addColorStop(1, "#0284c7");
-
-      ctx.fillStyle = coreGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, baseRadius * 0.72, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    }
-
-    function drawLaserBeam(now) {
-      const elapsed = now - fireStartTime;
-      const progress = Math.min(1, elapsed / BEAM_DURATION_MS);
-      // 초반 빠르게 뻗고 후반부에 서서히 가늘어지며 소멸
-      const intensity = progress < 0.2 ? progress / 0.2 : 1 - (progress - 0.2) / 0.8;
-      const alpha = Math.max(0, intensity);
-
-      const maxLen = Math.hypot(canvasEl.width, canvasEl.height) * 1.35;
-      const currentLen = maxLen * Math.min(1, progress * 4.5);
-
-      const endX = beamOrigin.x + beamDir.x * currentLen;
-      const endY = beamOrigin.y + beamDir.y * currentLen;
-
-      const beamWidth = (36 + beamPower * 54) * (0.45 + 0.55 * alpha);
-
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.globalAlpha = alpha;
-
-      // 1단: 넓은 파란 네온 글로우
-      ctx.strokeStyle = "rgba(14, 165, 233, 0.45)";
-      ctx.lineWidth = beamWidth * 2.2;
-      ctx.shadowColor = "#2563eb";
-      ctx.shadowBlur = 40;
-      ctx.beginPath();
-      ctx.moveTo(beamOrigin.x, beamOrigin.y);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-
-      // 2단: 굵은 네온 레이저 외피
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = beamWidth;
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 24;
-      ctx.beginPath();
-      ctx.moveTo(beamOrigin.x, beamOrigin.y);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-
-      // 3단: 고에너지 백청색 코어 빔
-      ctx.strokeStyle = "#f0f9ff";
-      ctx.lineWidth = beamWidth * 0.42;
-      ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 16;
-      ctx.beginPath();
-      ctx.moveTo(beamOrigin.x, beamOrigin.y);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-
-      // 발사구 에너지 플레어
-      const flareRadius = beamWidth * 0.9;
-      const flareGrad = ctx.createRadialGradient(
-        beamOrigin.x, beamOrigin.y, 2,
-        beamOrigin.x, beamOrigin.y, flareRadius
-      );
-      flareGrad.addColorStop(0, "#ffffff");
-      flareGrad.addColorStop(0.4, "#7dd3fc");
-      flareGrad.addColorStop(1, "rgba(56, 189, 248, 0)");
-
-      ctx.fillStyle = flareGrad;
-      ctx.beginPath();
-      ctx.arc(beamOrigin.x, beamOrigin.y, flareRadius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    }
-
-    function updateAndDrawParticles() {
-      for (let i = shockwaves.length - 1; i >= 0; i--) {
-        const sw = shockwaves[i];
-        sw.radius += (sw.maxRadius - sw.radius) * 0.18 + 3;
-        sw.alpha -= 0.04;
-        if (sw.alpha <= 0) {
-          shockwaves.splice(i, 1);
-          continue;
-        }
-        ctx.save();
-        ctx.strokeStyle = sw.color;
-        ctx.globalAlpha = Math.max(0, sw.alpha);
-        ctx.lineWidth = 3;
-        ctx.shadowColor = sw.color;
-        ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      for (let i = sparks.length - 1; i >= 0; i--) {
-        const sp = sparks[i];
-        sp.x += sp.vx;
-        sp.y += sp.vy;
-        sp.life -= sp.decay;
-        if (sp.life <= 0) {
-          sparks.splice(i, 1);
-          continue;
-        }
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, sp.life);
-        ctx.fillStyle = sp.color;
-        ctx.shadowColor = sp.color;
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    function syncCanvasSize() {
-      const rect = canvasEl.getBoundingClientRect();
-      const targetW = Math.max(640, Math.floor(rect.width));
-      const targetH = Math.max(480, Math.floor(rect.height));
-      if (canvasEl.width !== targetW || canvasEl.height !== targetH) {
-        canvasEl.width = targetW;
-        canvasEl.height = targetH;
-      }
-    }
-
-    async function initCameraAndLandmarker() {
-      syncCanvasSize();
-      window.addEventListener("resize", syncCanvasSize);
-
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-      );
-
-      handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 1,
-        minHandDetectionConfidence: 0.55,
-        minHandPresenceConfidence: 0.55,
-        minTrackingConfidence: 0.55
-      });
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "user" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-
-      videoEl.srcObject = stream;
-      await videoEl.play();
-
-      phaseLabelEl.textContent = "대기 중 — 손을 활짝 펴세요";
-      requestAnimationFrame(renderLoop);
-    }
-
-    function renderLoop(now) {
-      const dtSec = Math.min(0.05, (now - lastFrameTime) / 1000);
-      lastFrameTime = now;
-
-      syncCanvasSize();
-      drawMirroredVideo();
-
-      if (handLandmarker && videoEl.readyState >= 2 && videoEl.currentTime !== lastVideoTime) {
-        lastVideoTime = videoEl.currentTime;
-        const result = handLandmarker.detectForVideo(videoEl, now);
-
-        if (result.landmarks && result.landmarks.length > 0) {
-          const lm = result.landmarks[0];
-          const rawOpenness = computeHandOpenness(lm);
-          smoothedOpenness = smoothedOpenness * 0.65 + rawOpenness * 0.35;
-          const palmPos = getPalmCenterPx(lm);
-          lastPalmPos = palmPos;
-
-          drawHandSkeleton(lm);
-          updateStateMachine(smoothedOpenness, palmPos, lm, dtSec, now);
-
-          if (state === "CHARGING") {
-            drawNeonEnergyOrb(palmPos.x, palmPos.y, charge, now);
-          }
-        } else {
-          // 손이 화면에서 잠시 벗어나도 충전 중/발사 중 이펙트는 자연스럽게 이어감
-          smoothedOpenness = smoothedOpenness * 0.85 + 0.5 * 0.15;
-          if (state === "FIRING") {
-            updateStateMachine(smoothedOpenness, lastPalmPos || { x: canvasEl.width / 2, y: canvasEl.height / 2 }, null, dtSec, now);
-          } else {
-            phaseLabelEl.textContent = "손을 카메라 앞에 보여주세요";
-          }
-          if (state === "CHARGING" && lastPalmPos) {
-            drawNeonEnergyOrb(lastPalmPos.x, lastPalmPos.y, charge, now);
-          }
-        }
-      }
-
-      if (state === "FIRING") {
-        drawLaserBeam(now);
-      }
-
-      updateAndDrawParticles();
-      requestAnimationFrame(renderLoop);
-    }
-
-    initCameraAndLandmarker().catch((err) => {
-      console.error(err);
-      phaseLabelEl.textContent = "초기화 오류";
-      detailLabelEl.textContent = "전면 카메라 권한 또는 네트워크 연결을 확인해 주세요.";
-      guidePillEl.textContent = "HTTPS 또는 localhost 환경에서 실행했는지 확인해 주세요.";
-    });
-  </script>
-</body>
-</html>
+    let beamEnd = { x: 0, y: -100 };
+    let beamWidth = 48;
+    let beamPower = 1;
+    let hitGhostIdsThisShot = new Set();
+
+    let score = 0;
+    let kills = 0;
+    let combo = 0;
+    let last
