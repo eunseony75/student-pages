@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediaPipe 손 인식 주황색 에너지 구체 & 레이저 빔</title>
+  <title>MediaPipe 손 인식 주황색 에너지 구체 &amp; 파지직 번개 이펙트</title>
   <style>
     * {
       box-sizing: border-box;
@@ -47,7 +47,7 @@
       backdrop-filter: blur(10px);
       border-radius: 14px;
       padding: 14px 18px;
-      max-width: 390px;
+      max-width: 400px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     }
     #hud h1 {
@@ -87,12 +87,12 @@
   </div>
 
   <div id="hud">
-    <h1>HAND ENERGY &amp; LASER SYSTEM</h1>
+    <h1>HAND ENERGY &amp; LIGHTNING SYSTEM</h1>
     <div id="status-text">카메라 및 MediaPipe HandLandmarker 초기화 중...</div>
     <div class="guide">
       1. 손을 <b>완전히 펼쳐</b> 보자기 상태 만들기<br />
       2. 손을 <b>오므리면</b> 손바닥에 주황색 에너지 구체 충전<br />
-      3. 다시 <b>완전히 펴면</b> 전방으로 굵은 레이저 빔 발사
+      3. 다시 <b>완전히 펴면</b> 전방으로 "파지직" 번개 발사
     </div>
     <div id="state-badge" class="badge">STATE: IDLE</div>
   </div>
@@ -112,8 +112,8 @@
 
     const drawingUtils = new DrawingUtils(ctx);
 
-    // 제스처 상태 머신:
-    // IDLE -> ARMED_OPEN (완전히 편 상태) -> CHARGING (오므리며 충전) -> FIRING (다시 펴서 레이저 발사)
+    // 상태 머신:
+    // IDLE -> ARMED_OPEN (완전히 편 상태) -> CHARGING (오므리며 충전) -> FIRING (다시 펴서 번개 발사)
     const STATE = {
       IDLE: "IDLE",
       ARMED_OPEN: "ARMED_OPEN",
@@ -122,12 +122,15 @@
     };
 
     let currentState = STATE.IDLE;
-    let charge = 0; // 0.0 ~ 1.0
-    let beamTimer = 0; // 발사 지속 시간(초)
-    let beamIntensity = 0; // 0.0 ~ 1.0
+    let charge = 0;          // 0.0 ~ 1.0
+    let boltTimer = 0;       // 번개 발사 남은 시간(초)
+    let boltIntensity = 0;   // 0.0 ~ 1.0
+    let arcRefreshTimer = 0; // "파지직" 번개 경로 재생성 주기
+    let activeBolts = [];    // 현재 프레임에 그려질 다중 번개 체인들
+    let sparks = [];         // 번개 스파크 입자
     let screenShake = 0;
 
-    // 손바닥 중심 스무딩 및 레이저 방향
+    // 손바닥 중심 및 전방 발사 방향 스무딩
     let palmPos = null;
     let aimDir = { x: 0, y: -1 };
     let lastTime = performance.now();
@@ -151,36 +154,34 @@
       return Math.hypot(a.x - b.x, a.y - b.y);
     }
 
-    // 손 크기(손목 ~ 중지 MCP) 대비 손가락 펴짐/오므림 정도 계산 (0 = 완전히 오므림, 1 = 완전히 펼침)
+    // 손 크기(손목 ~ 중지 MCP) 대비 손가락 펴짐/오므림 정도 (0 = 오므림, 1 = 완전히 펼침)
     function computeOpenness(landmarks) {
       const wrist = landmarks[0];
       const middleMcp = landmarks[9];
       const palmScale = Math.max(dist(wrist, middleMcp), 1e-4);
 
       const fingers = [
-        { tip: 8, mcp: 5 },   // 검지
-        { tip: 12, mcp: 9 },  // 중지
-        { tip: 16, mcp: 13 }, // 약지
-        { tip: 20, mcp: 17 }  // 새끼
+        { tip: 8, mcp: 5 },
+        { tip: 12, mcp: 9 },
+        { tip: 16, mcp: 13 },
+        { tip: 20, mcp: 17 }
       ];
 
       let sumRatio = 0;
       for (const f of fingers) {
         const tipDist = dist(wrist, landmarks[f.tip]);
         const mcpDist = dist(wrist, landmarks[f.mcp]);
-        // 손이 펼쳐지면 tipDist가 mcpDist보다 훨씬 큼
         const raw = (tipDist - mcpDist * 0.75) / (palmScale * 1.15);
         sumRatio += Math.max(0, Math.min(1, raw));
       }
 
-      // 엄지(tip 4, mcp 2)도 반영
       const thumbRaw = (dist(landmarks[17], landmarks[4]) - palmScale * 0.65) / (palmScale * 1.1);
       sumRatio += Math.max(0, Math.min(1, thumbRaw));
 
       return sumRatio / 5;
     }
 
-    // 손바닥 중심 좌표(캔버스 픽셀 기준, 좌우 반전 반영)
+    // 손바닥 중심 좌표(캔버스 픽셀, 좌우 반전 반영)
     function getPalmCenter(landmarks, viewW, viewH) {
       const indices = [0, 1, 5, 9, 13, 17];
       let sx = 0;
@@ -189,15 +190,12 @@
         sx += landmarks[idx].x;
         sy += landmarks[idx].y;
       }
-      const nx = 1 - sx / indices.length; // 전면 카메라 미러링
+      const nx = 1 - sx / indices.length;
       const ny = sy / indices.length;
-      return {
-        x: nx * viewW,
-        y: ny * viewH
-      };
+      return { x: nx * viewW, y: ny * viewH };
     }
 
-    // 손목 -> 중지 MCP 벡터로 전방 발사 방향 계산 (미러링 반영)
+    // 손목 -> 중지 MCP 벡터로 전방 발사 방향 계산(좌우 반전 반영)
     function getForwardDirection(landmarks) {
       const wrist = landmarks[0];
       const middleMcp = landmarks[9];
@@ -240,7 +238,6 @@
           continue;
         }
 
-        // 나선형으로 빨려 들어가듯 이동
         const nx = dx / d;
         const ny = dy / d;
         const tx = -ny;
@@ -271,7 +268,6 @@
 
       ctx.save();
 
-      // 바깥 주황색 글로우
       const outerGrad = ctx.createRadialGradient(x, y, r * 0.1, x, y, r * 2.1);
       outerGrad.addColorStop(0, "rgba(255, 248, 210, 0.98)");
       outerGrad.addColorStop(0.28, "rgba(255, 166, 25, 0.9)");
@@ -283,7 +279,6 @@
       ctx.arc(x, y, r * 2.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // 에너지 코어 구체
       const coreGrad = ctx.createRadialGradient(
         x - r * 0.25,
         y - r * 0.25,
@@ -302,7 +297,6 @@
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // 회전하는 에너지 링
       ctx.strokeStyle = `rgba(255, 210, 110, ${0.4 + amount * 0.5})`;
       ctx.lineWidth = 2 + amount * 2.5;
       for (let i = 0; i < 2; i++) {
@@ -315,7 +309,6 @@
         ctx.restore();
       }
 
-      // 충전 진행 게이지 링
       ctx.strokeStyle = "rgba(255, 235, 180, 0.85)";
       ctx.lineWidth = 3.5;
       ctx.beginPath();
@@ -325,52 +318,190 @@
       ctx.restore();
     }
 
-    function drawLaserBeam(ctx, originX, originY, dir, intensity, timeSec, viewW, viewH) {
-      if (intensity <= 0.01) return;
+    // "파지직" 날카로운 지그재그 번개 세그먼트 생성
+    function buildJaggedBoltPoints(startX, startY, endX, endY, segments, jitterAmp, spreadAngle) {
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const baseAngle = Math.atan2(dy, dx) + spreadAngle;
+      const totalLen = Math.hypot(dx, dy);
 
-      const beamLength = Math.max(viewW, viewH) * 2.2;
-      const endX = originX + dir.x * beamLength;
-      const endY = originY + dir.y * beamLength;
+      const pts = [{ x: startX, y: startY }];
+      let currX = startX;
+      let currY = startY;
 
-      const flicker = 0.9 + Math.sin(timeSec * 48) * 0.1;
-      const baseWidth = (34 + intensity * 54) * flicker;
+      for (let i = 1; i < segments; i++) {
+        const t = i / segments;
+        // 전진 방향을 따라가며 날카로운 꺾임 추가
+        const stepLen = (totalLen / segments) * (0.75 + Math.random() * 0.5);
+        const perpAngle = baseAngle + (Math.random() < 0.5 ? -1 : 1) * (Math.PI / 2);
+        const jagged = (Math.random() - 0.5) * 2 * jitterAmp * (0.45 + 0.75 * Math.sin(t * Math.PI));
+
+        currX += Math.cos(baseAngle) * stepLen + Math.cos(perpAngle) * jagged;
+        currY += Math.sin(baseAngle) * stepLen + Math.sin(perpAngle) * jagged;
+        pts.push({ x: currX, y: currY });
+      }
+
+      pts.push({
+        x: startX + Math.cos(baseAngle) * totalLen,
+        y: startY + Math.sin(baseAngle) * totalLen
+      });
+      return pts;
+    }
+
+    // 메인 번개 + 사방으로 뻗는 잔가지("파지직" 분기) 생성
+    function generateLightningBurst(originX, originY, dir, intensity, viewW, viewH) {
+      const baseAngle = Math.atan2(dir.y, dir.x);
+      const reach = Math.max(viewW, viewH) * (1.25 + intensity * 0.45);
+      const bolts = [];
+
+      // 메인 번개 줄기 3가닥(약간씩 다른 전방 각도)
+      const mainAngles = [-0.14, 0, 0.14];
+      for (let m = 0; m < mainAngles.length; m++) {
+        const angle = baseAngle + mainAngles[m] + (Math.random() - 0.5) * 0.08;
+        const endX = originX + Math.cos(angle) * reach;
+        const endY = originY + Math.sin(angle) * reach;
+        const mainPts = buildJaggedBoltPoints(
+          originX,
+          originY,
+          endX,
+          endY,
+          22,
+          34 * (0.7 + intensity * 0.5),
+          0
+        );
+
+        bolts.push({
+          points: mainPts,
+          width: (m === 1 ? 6.5 : 4) * (0.65 + intensity * 0.55),
+          isBranch: false
+        });
+
+        // 메인 줄기 중간중간에서 튀어나오는 "파지직" 분기 번개
+        for (let i = 3; i < mainPts.length - 2; i += 2) {
+          if (Math.random() < 0.72) {
+            const p = mainPts[i];
+            const branchSide = Math.random() < 0.5 ? -1 : 1;
+            const branchAngle =
+              angle + branchSide * (0.35 + Math.random() * 0.75);
+            const branchLen = (75 + Math.random() * 190) * (0.6 + intensity * 0.6);
+            const bEndX = p.x + Math.cos(branchAngle) * branchLen;
+            const bEndY = p.y + Math.sin(branchAngle) * branchLen;
+
+            const branchPts = buildJaggedBoltPoints(
+              p.x,
+              p.y,
+              bEndX,
+              bEndY,
+              7,
+              18,
+              0
+            );
+            bolts.push({
+              points: branchPts,
+              width: 2.2 * (0.6 + intensity * 0.5),
+              isBranch: true
+            });
+          }
+        }
+      }
+
+      // 손바닥 주변에서 사방으로 튀는 짧은 크랙 아크(파지직 느낌 강조)
+      for (let k = 0; k < 6; k++) {
+        const arcAngle = baseAngle + (Math.random() - 0.5) * Math.PI * 1.4;
+        const arcLen = 45 + Math.random() * 95;
+        const arcPts = buildJaggedBoltPoints(
+          originX,
+          originY,
+          originX + Math.cos(arcAngle) * arcLen,
+          originY + Math.sin(arcAngle) * arcLen,
+          6,
+          14,
+          0
+        );
+        bolts.push({
+          points: arcPts,
+          width: 2.4,
+          isBranch: true
+        });
+      }
+
+      // 스파크 입자 추가
+      for (let s = 0; s < 18; s++) {
+        const spAngle = baseAngle + (Math.random() - 0.5) * 1.6;
+        const spSpeed = 260 + Math.random() * 580;
+        sparks.push({
+          x: originX + (Math.random() - 0.5) * 24,
+          y: originY + (Math.random() - 0.5) * 24,
+          vx: Math.cos(spAngle) * spSpeed,
+          vy: Math.sin(spAngle) * spSpeed,
+          life: 0.14 + Math.random() * 0.22,
+          maxLife: 0.36,
+          size: 1.8 + Math.random() * 2.8
+        });
+      }
+
+      return bolts;
+    }
+
+    function drawLightningSystem(ctx, dt, originX, originY, dir, intensity, timeSec, viewW, viewH) {
+      if (intensity <= 0.01) {
+        activeBolts = [];
+        return;
+      }
+
+      // 빠른 간격으로 "파지직" 번개 형상을 새로 튕기게 갱신
+      arcRefreshTimer -= dt;
+      if (arcRefreshTimer <= 0 || activeBolts.length === 0) {
+        arcRefreshTimer = 0.045; // 약 22Hz로 파지직 번쩍임
+        activeBolts = generateLightningBurst(
+          originX,
+          originY,
+          dir,
+          intensity,
+          viewW,
+          viewH
+        );
+      }
 
       ctx.save();
+      ctx.lineJoin = "miter";
       ctx.lineCap = "round";
 
-      // 1. 넓은 주황색 외곽 글로우
-      ctx.strokeStyle = `rgba(255, 85, 0, ${0.28 * intensity})`;
-      ctx.lineWidth = baseWidth * 2.3;
-      ctx.shadowColor = "#ff5500";
-      ctx.shadowBlur = 45;
-      ctx.beginPath();
-      ctx.moveTo(originX, originY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
+      for (const bolt of activeBolts) {
+        if (bolt.points.length < 2) continue;
 
-      // 2. 굵은 주황색 메인 빔 몸체
-      ctx.strokeStyle = `rgba(255, 145, 20, ${0.88 * intensity})`;
-      ctx.lineWidth = baseWidth;
-      ctx.shadowColor = "#ff9900";
-      ctx.shadowBlur = 24;
-      ctx.beginPath();
-      ctx.moveTo(originX, originY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
+        for (let i = 1; i < bolt.points.length; i++) {
+          ctx.lineTo(bolt.points[i].x, bolt.points[i].y);
+        }
 
-      // 3. 고열 백색-황금색 중심 코어
-      ctx.strokeStyle = `rgba(255, 252, 232, ${0.98 * intensity})`;
-      ctx.lineWidth = baseWidth * 0.42;
-      ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.moveTo(originX, originY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
+        // 1. 주황색 외곽 글로우
+        ctx.strokeStyle = `rgba(255, 102, 0, ${0.42 * intensity})`;
+        ctx.lineWidth = bolt.width * 3.2;
+        ctx.shadowColor = "#ff6a00";
+        ctx.shadowBlur = 28;
+        ctx.stroke();
 
-      // 4. 발사 원점(손바닥) 플래시
-      const flashR = (38 + intensity * 42) * flicker;
-      const flashGrad = ctx.createRadialGradient(
+        // 2. 선명한 주황-금색 번개 몸체
+        ctx.strokeStyle = `rgba(255, 175, 45, ${0.92 * intensity})`;
+        ctx.lineWidth = bolt.width * 1.45;
+        ctx.shadowColor = "#ffaa00";
+        ctx.shadowBlur = 14;
+        ctx.stroke();
+
+        // 3. 눈부신 백색 코어
+        ctx.strokeStyle = `rgba(255, 253, 240, ${0.98 * intensity})`;
+        ctx.lineWidth = Math.max(1.2, bolt.width * 0.55);
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+      }
+
+      // 손바닥 방전 플래시
+      const flashPulse = 0.85 + Math.sin(timeSec * 65) * 0.15;
+      const flashR = (34 + intensity * 38) * flashPulse;
+      const grad = ctx.createRadialGradient(
         originX,
         originY,
         2,
@@ -378,17 +509,43 @@
         originY,
         flashR
       );
-      flashGrad.addColorStop(0, "rgba(255, 255, 255, 1)");
-      flashGrad.addColorStop(0.35, "rgba(255, 185, 50, 0.9)");
-      flashGrad.addColorStop(0.75, "rgba(255, 90, 0, 0.45)");
-      flashGrad.addColorStop(1, "rgba(255, 60, 0, 0)");
+      grad.addColorStop(0, "rgba(255, 255, 255, 1)");
+      grad.addColorStop(0.35, "rgba(255, 195, 70, 0.92)");
+      grad.addColorStop(0.75, "rgba(255, 100, 0, 0.45)");
+      grad.addColorStop(1, "rgba(255, 70, 0, 0)");
 
-      ctx.fillStyle = flashGrad;
+      ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(originX, originY, flashR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
+    }
+
+    function updateAndDrawSparks(ctx, dt) {
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.life -= dt;
+        if (s.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.vx *= 0.92;
+        s.vy *= 0.92;
+
+        const alpha = Math.max(0, s.life / s.maxLife);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#ffe08a";
+        ctx.shadowColor = "#ff8800";
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     function updateStateMachine(dt, handDetected, openness, currentPalm, forwardDir) {
@@ -409,16 +566,15 @@
         aimDir.y /= len;
       }
 
-      // 레이저 발사 중일 때
       if (currentState === STATE.FIRING) {
-        beamTimer -= dt;
-        beamIntensity = Math.max(0, Math.min(1, beamTimer / 0.35));
-        screenShake = Math.max(screenShake, 7 * beamIntensity);
+        boltTimer -= dt;
+        boltIntensity = Math.max(0, Math.min(1, boltTimer / 0.28));
+        screenShake = Math.max(screenShake, 8 * boltIntensity);
 
-        if (beamTimer <= 0) {
-          beamIntensity = 0;
+        if (boltTimer <= 0) {
+          boltIntensity = 0;
           charge = 0;
-          // 손이 이미 펼쳐져 있으면 다음 사이클을 위해 ARMED_OPEN으로 바로 전환
+          activeBolts = [];
           currentState = handDetected && openness >= 0.72 ? STATE.ARMED_OPEN : STATE.IDLE;
         }
         return;
@@ -435,9 +591,8 @@
         return;
       }
 
-      // 손이 인식된 경우 상태 전환
-      const OPEN_THRESHOLD = 0.72;   // 완전히 편 상태(보자기)
-      const CLOSED_THRESHOLD = 0.36; // 오므린 상태
+      const OPEN_THRESHOLD = 0.72;
+      const CLOSED_THRESHOLD = 0.36;
 
       if (currentState === STATE.IDLE) {
         charge = Math.max(0, charge - dt * 1.0);
@@ -445,22 +600,21 @@
           currentState = STATE.ARMED_OPEN;
         }
       } else if (currentState === STATE.ARMED_OPEN) {
-        // 편 상태에서 오므리기 시작하면 에너지 구체 충전 시작
         if (openness <= CLOSED_THRESHOLD) {
           currentState = STATE.CHARGING;
         }
       } else if (currentState === STATE.CHARGING) {
-        // 오므린 정도가 강할수록 더 빠르게 충전
         const foldFactor = Math.max(0.35, 1 - openness);
         charge = Math.min(1, charge + dt * 1.15 * foldFactor);
         spawnChargeParticles(palmPos.x, palmPos.y, charge);
 
-        // 충전이 어느 정도 된 상태에서 손을 다시 완전히 펴면(보자기) 전방 레이저 발사!
+        // 충전된 상태에서 다시 완전히 펼치면 전방으로 "파지직" 번개 발사!
         if (openness >= OPEN_THRESHOLD && charge >= 0.25) {
           currentState = STATE.FIRING;
-          beamTimer = 0.85;
-          beamIntensity = 1;
-          screenShake = 12;
+          boltTimer = 0.75;
+          boltIntensity = 1;
+          arcRefreshTimer = 0;
+          screenShake = 13;
         }
       }
     }
@@ -479,9 +633,9 @@
       } else if (currentState === STATE.ARMED_OPEN) {
         statusText.textContent = `보자기 준비 완료(펴짐 ${openPct}%)! 손을 오므려 에너지를 충전하세요.`;
       } else if (currentState === STATE.CHARGING) {
-        statusText.textContent = `주황색 에너지 구체 충전 중 (${Math.round(charge * 100)}%) — 다시 펴면 레이저 발사!`;
+        statusText.textContent = `주황색 에너지 구체 충전 중 (${Math.round(charge * 100)}%) — 다시 펴면 번개 발사!`;
       } else if (currentState === STATE.FIRING) {
-        statusText.textContent = "전방 레이저 빔 발사 중!!";
+        statusText.textContent = "파지직!! 전방 번개 방전 중!";
       }
     }
 
@@ -551,8 +705,7 @@
       updateStateMachine(dt, handDetected, openness, currentPalm, forwardDir);
       updateHud(handDetected, openness);
 
-      // 화면 흔들림 감쇠
-      screenShake = Math.max(0, screenShake - dt * 28);
+      screenShake = Math.max(0, screenShake - dt * 30);
       const shakeX = (Math.random() - 0.5) * 2 * screenShake;
       const shakeY = (Math.random() - 0.5) * 2 * screenShake;
 
@@ -560,7 +713,6 @@
       ctx.clearRect(0, 0, viewW, viewH);
       ctx.translate(shakeX, shakeY);
 
-      // 전면 카메라 영상 좌우 반전 렌더링(비율 유지 커버)
       if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
         const vidRatio = videoEl.videoWidth / videoEl.videoHeight;
         const viewRatio = viewW / viewH;
@@ -584,13 +736,13 @@
         ctx.drawImage(videoEl, 0, 0, drawW, drawH);
         ctx.restore();
 
-        // 레이저 발사 시 화면 전체에 주황빛 플래시 오버레이
-        if (beamIntensity > 0) {
-          ctx.fillStyle = `rgba(255, 110, 0, ${0.14 * beamIntensity})`;
+        // 번개 방전 시 순간 플래시 오버레이
+        if (boltIntensity > 0) {
+          const flashAlpha = (0.08 + Math.random() * 0.1) * boltIntensity;
+          ctx.fillStyle = `rgba(255, 130, 10, ${flashAlpha})`;
           ctx.fillRect(-20, -20, viewW + 40, viewH + 40);
         }
 
-        // 손 랜드마크 가이드 라인 그리기 (미러링 좌표 적용)
         if (landmarks) {
           const mirroredLandmarks = landmarks.map((pt) => ({
             x: (1 - pt.x) * drawW + offsetX,
@@ -610,7 +762,6 @@
         }
       }
 
-      // 충전 파티클 및 주황색 에너지 구체 렌더링
       if (palmPos) {
         updateAndDrawParticles(ctx, dt, palmPos.x, palmPos.y);
         if (currentState === STATE.CHARGING || charge > 0.01) {
@@ -618,19 +769,21 @@
         }
       }
 
-      // 전방 굵은 레이저 빔 렌더링
-      if (palmPos && beamIntensity > 0.01) {
-        drawLaserBeam(
+      if (palmPos && boltIntensity > 0.01) {
+        drawLightningSystem(
           ctx,
+          dt,
           palmPos.x,
           palmPos.y,
           aimDir,
-          beamIntensity,
+          boltIntensity,
           timeSec,
           viewW,
           viewH
         );
       }
+
+      updateAndDrawSparks(ctx, dt);
 
       ctx.restore();
       requestAnimationFrame(renderLoop);
