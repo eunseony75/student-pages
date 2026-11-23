@@ -173,10 +173,14 @@
       color: var(--accent);
     }
 
+    .greeting-text.active-friend {
+      color: var(--warning);
+    }
+
     .greeting-text.muted {
       color: var(--muted);
-      font-size: 1rem;
-      font-weight: 500;
+      font-size: 1.15rem;
+      font-weight: 600;
     }
 
     .prob-panel {
@@ -308,12 +312,15 @@
     const LABELS = {
       ME: "나",
       HELLO: "안녕하세요",
+      FRIEND: "친구",
       BG: "배경"
     };
 
     const GREETINGS = {
-      [LABELS.ME]: "반갑습니다! 오늘도 좋은 하루 보내세요.",
-      [LABELS.HELLO]: "안녕하세요? 용건을 말해주세요"
+      [LABELS.ME]: "어서 와!",
+      [LABELS.HELLO]: "안녕하세요? 용건을 말해주세요",
+      [LABELS.FRIEND]: "반가워 친구야",
+      [LABELS.BG]: "아무도 없네"
     };
 
     let model = null;
@@ -322,7 +329,7 @@
 
     let candidateLabel = null;
     let consecutiveCount = 0;
-    let confirmedState = LABELS.BG; // 초기 상태는 배경(사람 없음)으로 설정
+    let confirmedState = null;
 
     const barElements = {};
     const valueElements = {};
@@ -379,9 +386,8 @@
     }
 
     function speakKorean(text) {
-      if (!("speechSynthesis" in window)) return;
+      if (!text || !("speechSynthesis" in window)) return;
       try {
-        // 이전 발화가 겹치지 않도록 취소 후 새로 발화
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "ko-KR";
@@ -404,23 +410,31 @@
     function updateGreetingUI(state) {
       greetingDisplayEl.className = "greeting-text";
 
+      if (!state) {
+        stateCaptionEl.textContent = "확정 상태: 대기 중";
+        greetingDisplayEl.textContent = "카메라가 준비되면 얼굴을 인식합니다.";
+        greetingDisplayEl.classList.add("muted");
+        return;
+      }
+
+      const message = GREETINGS[state] || `${state} 상태가 인식되었습니다.`;
+      stateCaptionEl.textContent = state === LABELS.BG
+        ? `확정 상태: ${LABELS.BG} (사람 없음)`
+        : `확정 상태: ${state}`;
+      greetingDisplayEl.textContent = message;
+
       if (state === LABELS.ME) {
-        stateCaptionEl.textContent = `확정 상태: ${LABELS.ME}`;
-        greetingDisplayEl.textContent = GREETINGS[LABELS.ME];
         greetingDisplayEl.classList.add("active-me");
       } else if (state === LABELS.HELLO) {
-        stateCaptionEl.textContent = `확정 상태: ${LABELS.HELLO}`;
-        greetingDisplayEl.textContent = GREETINGS[LABELS.HELLO];
         greetingDisplayEl.classList.add("active-hello");
+      } else if (state === LABELS.FRIEND) {
+        greetingDisplayEl.classList.add("active-friend");
       } else {
-        stateCaptionEl.textContent = `확정 상태: ${LABELS.BG} (사람 없음)`;
-        greetingDisplayEl.textContent = "현재 인식된 사람이 없습니다.";
         greetingDisplayEl.classList.add("muted");
       }
     }
 
     function processStabilizedState(predictions) {
-      // 가장 높은 확률의 예측 찾기
       let topPred = predictions[0];
       for (let i = 1; i < predictions.length; i++) {
         if (predictions[i].probability > topPred.probability) {
@@ -436,7 +450,6 @@
           consecutiveCount = 1;
         }
       } else {
-        // 기준 확신도 미달 시 연속 카운트 초기화
         candidateLabel = null;
         consecutiveCount = 0;
       }
@@ -445,21 +458,15 @@
         `연속 감지: ${consecutiveCount} / ${REQUIRED_CONSECUTIVE_FRAMES} 프레임` +
         (candidateLabel ? ` (${candidateLabel})` : "");
 
-      // N프레임 연속 충족 시 상태 확정
       if (candidateLabel && consecutiveCount >= REQUIRED_CONSECUTIVE_FRAMES) {
         const nextState = candidateLabel;
 
-        // 이전 확정 상태와 다를 때만 상태 전환 및 1회 발화
         if (nextState !== confirmedState) {
           confirmedState = nextState;
           updateGreetingUI(confirmedState);
 
-          if (confirmedState === LABELS.ME) {
-            speakKorean(GREETINGS[LABELS.ME]);
-          } else if (confirmedState === LABELS.HELLO) {
-            speakKorean(GREETINGS[LABELS.HELLO]);
-          }
-          // [배경]은 사람 없음 처리 및 인사말 미출력
+          const speechText = GREETINGS[confirmedState] || `${confirmedState}로 인식되었습니다.`;
+          speakKorean(speechText);
         }
       }
     }
@@ -527,7 +534,6 @@
       };
     }
 
-    // 페이지 열리자마자 자동 시작
     window.addEventListener("DOMContentLoaded", init);
   </script>
 </body>
