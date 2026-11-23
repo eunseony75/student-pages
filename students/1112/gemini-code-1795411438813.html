@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>실시간 얼굴 인식 인사말</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --friend: #f59e0b;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 920px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .webcam-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #webcam-container {
+      width: 320px;
+      height: 320px;
+      max-width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      background: #020617;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #webcam-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      display: block;
+    }
+
+    .greeting-box {
+      width: 100%;
+      min-height: 112px;
+      border-radius: 16px;
+      padding: 18px 20px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      transition: border-color 0.25s ease, background 0.25s ease;
+    }
+
+    .greeting-box.mode-me {
+      border-color: var(--success);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .greeting-box.mode-friend {
+      border-color: var(--friend);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .greeting-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .greeting-text {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .panel h2 {
+      font-size: 1rem;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .prob-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .prob-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .prob-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.95rem;
+    }
+
+    .prob-name {
+      font-weight: 600;
+    }
+
+    .prob-value {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 12px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.12s ease-out;
+    }
+
+    .meta {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .tts-hint {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>실시간 얼굴 인식 인사말</h1>
+      <div id="system-status" class="status-badge">모델 및 웹캠 초기화 중...</div>
+    </div>
+
+    <div class="grid">
+      <div class="webcam-box">
+        <div id="webcam-container"></div>
+
+        <div id="greeting-box" class="greeting-box">
+          <div id="greeting-state-tag" class="greeting-label">대기 중 (사람 없음)</div>
+          <div id="greeting-message" class="greeting-text">인식 대기 중입니다.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>실시간 레이블 인식 확률</h2>
+        <div id="label-container" class="prob-list"></div>
+
+        <div class="meta">
+          <div>• 확신도 <strong>75% 이상</strong>이 <strong>6프레임 연속</strong> 감지될 때 상태를 확정합니다.</div>
+          <div>• <strong>[나]</strong>: 환영 인사 화면 표시 및 한국어 음성 안내</div>
+          <div>• <strong>[친구]</strong>: "안녕하세요? 용건을 말해주세요" 표시 및 한국어 음성 안내</div>
+          <div>• <strong>[배경]</strong>: 사람이 없는 상태로 처리하며 인사하지 않음</div>
+          <div class="tts-hint">※ 브라우저 정책에 따라 첫 음성 출력이 막히면 화면을 한 번 클릭해 주세요.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <script>
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/A8TqwDAio/";
+
+    // 프레임 흔들림 방지 설정
+    const CONFIDENCE_THRESHOLD = 0.75; // 최소 확신도 (75%)
+    const REQUIRED_CONSECUTIVE_FRAMES = 6; // 연속 감지 프레임 수
+    const GREETING_COOLDOWN_MS = 5000; // 동일 대상 재인식 시 음성 재출력 최소 간격
+
+    const statusBadge = document.getElementById("system-status");
+    const labelContainer = document.getElementById("label-container");
+    const greetingBox = document.getElementById("greeting-box");
+    const greetingStateTag = document.getElementById("greeting-state-tag");
+    const greetingMessage = document.getElementById("greeting-message");
+
+    let model = null;
+    let webcam = null;
+    let maxPredictions = 0;
+    let barElements = [];
+
+    // 연속 프레임 추적 상태
+    let candidateLabel = null;
+    let consecutiveCount = 0;
+    let confirmedState = "[배경]"; // "[나]" | "[친구]" | "[배경]"
+    let lastSpokenState = null;
+    let lastSpokenAt = 0;
+
+    function normalizeLabel(rawLabel) {
+      const cleaned = rawLabel.trim();
+      if (cleaned === "[나]" || cleaned === "나") return "[나]";
+      if (cleaned === "[친구]" || cleaned === "친구") return "[친구]";
+      if (cleaned === "[배경]" || cleaned === "배경") return "[배경]";
+      return cleaned;
+    }
+
+    function speakKorean(text) {
+      if (!("speechSynthesis" in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "ko-KR";
+        utterance.rate =
