@@ -3,19 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>실시간 얼굴 인식 인사말 웹앱</title>
+  <title>MediaPipe 손 인식 머니 이펙트</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --card-border: #334155;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --success: #22c55e;
-      --warn: #f59e0b;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -23,480 +12,569 @@
     }
 
     body {
+      background: #0d1117;
+      color: #f0f6fc;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      padding: 24px 16px;
-    }
-
-    .container {
-      width: 100%;
-      max-width: 920px;
-      display: grid;
-      gap: 20px;
-    }
-
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    header h1 {
-      font-size: 1.4rem;
-      font-weight: 700;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.875rem;
-      color: var(--muted);
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--warn);
-    }
-
-    .dot.ready {
-      background: var(--success);
-    }
-
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .main-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 18px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-    }
-
-    .webcam-box {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      background: #020617;
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid var(--card-border);
+      min-height: 100vh;
+      overflow: hidden;
     }
 
-    .webcam-box canvas {
-      width: 100% !important;
-      height: 100% !important;
+    .stage-wrapper {
+      position: relative;
+      width: min(92vw, 960px);
+      aspect-ratio: 16 / 9;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #161b22;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* 전면 카메라 거울 모드 */
+    video, canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       transform: scaleX(-1);
     }
 
-    .greeting-banner {
-      background: rgba(148, 163, 184, 0.1);
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      border-radius: 14px;
-      padding: 18px;
-      min-height: 96px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 6px;
+    video {
+      opacity: 0.92;
     }
 
-    .greeting-banner.state-yang {
-      background: rgba(34, 197, 94, 0.14);
-      border-color: rgba(34, 197, 94, 0.45);
+    canvas {
+      pointer-events: none;
     }
 
-    .greeting-banner.state-kwon {
-      background: rgba(56, 189, 248, 0.14);
-      border-color: rgba(56, 189, 248, 0.45);
-    }
-
-    .greeting-banner.state-bg {
-      background: rgba(148, 163, 184, 0.1);
-      border-color: rgba(148, 163, 184, 0.25);
-    }
-
-    .state-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--muted);
-      letter-spacing: 0.02em;
-    }
-
-    .greeting-text {
-      font-size: 1.25rem;
-      font-weight: 700;
-      line-height: 1.4;
-    }
-
-    .prob-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .prob-item {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .prob-header {
+    /* 상단 상태 HUD (거울 반전 방지 위해 캔버스 바깥에 배치) */
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
       display: flex;
       justify-content: space-between;
-      font-size: 0.95rem;
-      font-weight: 600;
-    }
-
-    .prob-header .confirmed-tag {
-      font-size: 0.75rem;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: var(--success);
-      color: #052e16;
-      margin-left: 8px;
-      display: none;
-    }
-
-    .prob-item.is-confirmed .confirmed-tag {
-      display: inline-block;
-    }
-
-    .bar-track {
-      width: 100%;
-      height: 14px;
-      background: #0f172a;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid #334155;
-    }
-
-    .bar-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #0284c7, #38bdf8);
-      border-radius: 999px;
-      transition: width 0.12s ease-out;
-    }
-
-    .prob-item.is-confirmed .bar-fill {
-      background: linear-gradient(90deg, #16a34a, #4ade80);
-    }
-
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      align-items: flex-start;
       gap: 12px;
-      padding-top: 8px;
-      border-top: 1px solid var(--card-border);
-      font-size: 0.85rem;
-      color: var(--muted);
+      z-index: 10;
+      pointer-events: none;
     }
 
-    .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    .badge {
+      background: rgba(13, 17, 23, 0.78);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 10px 14px;
+      line-height: 1.45;
+      font-size: 13px;
     }
 
-    .control-group label {
-      display: flex;
-      justify-content: space-between;
+    .status-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #58a6ff;
     }
 
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-      cursor: pointer;
+    .status-sub {
+      color: #c9d1d9;
+      margin-top: 2px;
     }
 
-    .btn-row {
-      display: flex;
+    .combo-box {
+      text-align: right;
+      background: rgba(13, 17, 23, 0.78);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+    }
+
+    .combo-label {
+      color: #8b949e;
+      font-size: 11px;
+    }
+
+    .combo-value {
+      font-weight: 700;
+      font-size: 15px;
+      color: #3fb950;
+      margin-top: 2px;
+    }
+
+    .guide-bar {
+      margin-top: 14px;
+      width: min(92vw, 960px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
-      flex-wrap: wrap;
+      font-size: 12.5px;
     }
 
-    button {
-      background: #334155;
-      color: var(--text);
-      border: 1px solid #475569;
-      padding: 8px 14px;
+    .guide-card {
+      background: #161b22;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
+      padding: 10px 12px;
+      color: #c9d1d9;
     }
 
-    button:hover {
-      background: #475569;
+    .guide-card strong {
+      display: block;
+      color: #f0f6fc;
+      margin-bottom: 3px;
     }
 
-    button.primary {
-      background: #0284c7;
-      border-color: #0ea5e9;
-    }
-
-    button.primary:hover {
-      background: #0369a1;
-    }
-
-    .error-msg {
-      color: #f87171;
-      font-size: 0.875rem;
-      line-height: 1.5;
-      padding: 12px;
-      text-align: center;
+    @media (max-width: 640px) {
+      .guide-bar {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
-
-  <!-- TensorFlow.js & Teachable Machine Image Library -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>실시간 얼굴 인식 인사말</h1>
-      <div class="status-badge">
-        <span id="statusDot" class="dot"></span>
-        <span id="statusText">모델 및 웹캠 로딩 중...</span>
+  <div class="stage-wrapper">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="hud">
+      <div class="badge">
+        <div id="stateText" class="status-title">카메라 및 모델 초기화 중...</div>
+        <div id="detailText" class="status-sub">전면 카메라 접근을 허용해 주세요.</div>
       </div>
-    </header>
-
-    <div class="main-grid">
-      <!-- 왼쪽: 웹캠 & 인사말 화면 -->
-      <section class="panel">
-        <div class="webcam-box" id="webcamContainer">
-          <div id="loadingPlaceholder" style="color: var(--muted); font-size: 0.9rem;">
-            카메라 권한을 허용해 주세요...
-          </div>
-        </div>
-
-        <div id="greetingBanner" class="greeting-banner state-bg">
-          <div class="state-label" id="stateLabel">확정 상태: 대기 중</div>
-          <div class="greeting-text" id="greetingText">대기 중입니다.</div>
-        </div>
-
-        <div class="btn-row">
-          <button id="enableSpeechBtn" class="primary" type="button">🔊 한국어 음성 활성화</button>
-          <button id="testSpeechBtn" type="button">음성 테스트</button>
-        </div>
-      </section>
-
-      <!-- 오른쪽: 레이블별 인식 확률 막대그래프 & 안정화 설정 -->
-      <section class="panel">
-        <h2 style="font-size: 1.05rem; font-weight: 700;">레이블별 인식 확률</h2>
-
-        <div class="prob-list" id="probList">
-          <!-- JS로 [양선진], [권규리], [배경] 항목 생성 -->
-        </div>
-
-        <div class="controls">
-          <div class="control-group">
-            <label for="thresholdRange">
-              <span>최소 확신도</span>
-              <span id="thresholdVal">80%</span>
-            </label>
-            <input id="thresholdRange" type="range" min="50" max="95" step="5" value="80" />
-          </div>
-
-          <div class="control-group">
-            <label for="streakRange">
-              <span>연속 프레임 수</span>
-              <span id="streakVal">6프레임</span>
-            </label>
-            <input id="streakRange" type="range" min="2" max="15" step="1" value="6" />
-          </div>
-        </div>
-
-        <p style="font-size: 0.8rem; color: var(--muted); line-height: 1.5;">
-          • <strong>[양선진]</strong>: 환영 인사 화면 표시 및 음성 출력<br />
-          • <strong>[권규리]</strong>: "안녕하세요? 용건을 말해주세요" 표시 및 음성 출력<br />
-          • <strong>[배경]</strong>: 부재중(사람 없음) 처리, 인사말 미출력<br />
-          • 상태가 바뀔 때만 1회 말하며, 동일 상태 유지 시 중복 발화를 막습니다.
-        </p>
-      </section>
+      <div class="combo-box">
+        <div class="combo-label">시퀀스 상태</div>
+        <div id="seqText" class="combo-value">대기 중</div>
+      </div>
     </div>
   </div>
 
-  <script>
-    // =========================================================================
-    // 설정값
-    // =========================================================================
-    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/HO_aGhewa/";
-    const LABELS = ["양선진", "권규리", "배경"];
-    const GREETINGS = {
-      "양선진": "환영합니다! 양선진 님, 반가워요.",
-      "권규리": "안녕하세요? 용건을 말해주세요",
-      "배경": ""
-    };
+  <div class="guide-bar">
+    <div class="guide-card">
+      <strong>1. 편 손(보자기) → 지폐 쏟아짐</strong>
+      손가락을 활짝 편 상태가 되면 손 위에서 지폐가 쏟아집니다.
+    </div>
+    <div class="guide-card">
+      <strong>2. 손 모으기(주먹/모음) → 장전</strong>
+      손을 모으면 돈다발이 장전됩니다.
+    </div>
+    <div class="guide-card">
+      <strong>3. 다시 펴기 → 돈다발 쏟아짐 & 전방 발사</strong>
+      모았다가 다시 펴면 돈다발이 쏟아지며 전방으로 발사됩니다!
+    </div>
+  </div>
 
-    let confidenceThreshold = 0.80; // 일정 확신도 이상
-    let requiredStreak = 6;         // 여러 프레임 연속 감지 횟수
+  <script type="module">
+    import {
+      HandLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
-    // =========================================================================
-    // 상태 변수
-    // =========================================================================
-    let model = null;
-    let webcam = null;
-    let isRunning = false;
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-    let candidateLabel = null;      // 현재 연속 감지 중인 후보 레이블
-    let candidateStreak = 0;        // 후보 레이블 연속 프레임 카운트
-    let confirmedState = null;      // 확정된 현재 상태 ("양선진" | "권규리" | "배경" | null)
+    const stateText = document.getElementById("stateText");
+    const detailText = document.getElementById("detailText");
+    const seqText = document.getElementById("seqText");
 
-    // =========================================================================
-    // DOM 요소
-    // =========================================================================
-    const statusDot = document.getElementById("statusDot");
-    const statusText = document.getElementById("statusText");
-    const webcamContainer = document.getElementById("webcamContainer");
-    const loadingPlaceholder = document.getElementById("loadingPlaceholder");
-    const greetingBanner = document.getElementById("greetingBanner");
-    const stateLabelEl = document.getElementById("stateLabel");
-    const greetingTextEl = document.getElementById("greetingText");
-    const probListEl = document.getElementById("probList");
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let animationFrameId = null;
 
-    const thresholdRange = document.getElementById("thresholdRange");
-    const thresholdVal = document.getElementById("thresholdVal");
-    const streakRange = document.getElementById("streakRange");
-    const streakVal = document.getElementById("streakVal");
-    const enableSpeechBtn = document.getElementById("enableSpeechBtn");
-    const testSpeechBtn = document.getElementById("testSpeechBtn");
+    // 손 상태 머신 변수
+    // gesture: "UNKNOWN" | "OPEN" | "CLOSED"
+    // phase: "IDLE" | "OPEN_POURING" | "GATHERED_CHARGED" | "BURST_FIRED"
+    let currentGesture = "UNKNOWN";
+    let sequencePhase = "IDLE";
+    let openCooldown = 0;
+    let fireCooldown = 0;
 
-    // 모델 클래스명과 대상 레이블([양선진], [권규리], [배경]) 매칭 정규화
-    function normalizeLabel(rawName) {
-      const cleaned = String(rawName || "").replace(/^\[\vert{}\]$/g, "").trim();
-      if (LABELS.includes(cleaned)) return cleaned;
-      return null;
+    // 파티클(지폐 & 돈다발) 배열
+    const particles = [];
+
+    // 손 연결선 인덱스 (MediaPipe 21 랜드마크)
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],       // 엄지
+      [0, 5], [5, 6], [6, 7], [7, 8],       // 검지
+      [5, 9], [9, 10], [10, 11], [11, 12],  // 중지
+      [9, 13], [13, 14], [14, 15], [15, 16],// 약지
+      [13, 17], [17, 18], [18, 19], [19, 20],// 소지
+      [0, 17]                               // 손바닥 하단
+    ];
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
     }
 
-    // 막대그래프 UI 초기화
-    const barElements = {};
-    function initProbabilityBars() {
-      probListEl.innerHTML = "";
-      LABELS.forEach((label) => {
-        const item = document.createElement("div");
-        item.className = "prob-item";
-        item.dataset.label = label;
+    /**
+     * 손가락 펴짐/모아짐 판별
+     * 손목(0)에서 중지 MCP(9)까지의 거리를 기준 스케일로 사용해 카메라 거리 변화에 강건하게 판별
+     */
+    function classifyHand(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmScale = Math.max(dist(wrist, middleMcp), 0.05);
 
-        item.innerHTML = `
-          <div class="prob-header">
-            <span>[${label}]<span class="confirmed-tag">확정됨</span></span>
-            <span class="prob-percent">0.0%</span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill"></div>
-          </div>
-        `;
+      const tips = [8, 12, 16, 20];
+      const pips = [6, 10, 14, 18];
 
-        probListEl.appendChild(item);
-        barElements[label] = {
-          item,
-          percentEl: item.querySelector(".prob-percent"),
-          fillEl: item.querySelector(".bar-fill")
+      let extendedCount = 0;
+      for (let i = 0; i < tips.length; i++) {
+        const tipDist = dist(wrist, landmarks[tips[i]]);
+        const pipDist = dist(wrist, landmarks[pips[i]]);
+        if (tipDist > pipDist * 1.12 && tipDist > palmScale * 1.15) {
+          extendedCount++;
+        }
+      }
+
+      // 엄지 펴짐 여부 (검지 MCP 5번과의 거리로 판별)
+      const thumbTipDist = dist(landmarks[4], landmarks[5]);
+      if (thumbTipDist > palmScale * 0.62) {
+        extendedCount++;
+      }
+
+      // 손끝들끼리의 평균 퍼짐 정도
+      const spread =
+        (dist(landmarks[8], landmarks[12]) +
+         dist(landmarks[12], landmarks[16]) +
+         dist(landmarks[16], landmarks[20])) / (3 * palmScale);
+
+      if (extendedCount >= 4 && spread > 0.26) {
+        return "OPEN";
+      }
+      if (extendedCount <= 1 && spread < 0.24) {
+        return "CLOSED";
+      }
+      return "UNKNOWN";
+    }
+
+    /**
+     * 지폐 또는 돈다발 파티클 생성
+     * mode:
+     *  - "bill": 낱장 지폐 쏟아짐
+     *  - "bundle": 돈다발 쏟아짐
+     *  - "launch": 전방 발사(비디오 좌표계 기준 -Y 방향이 화면 상단/전방)
+     */
+    function spawnMoney(x, y, mode, count = 1) {
+      for (let i = 0; i < count; i++) {
+        if (mode === "bill") {
+          particles.push({
+            type: "bill",
+            x: x + (Math.random() - 0.5) * 140,
+            y: y - 40 - Math.random() * 80,
+            vx: (Math.random() - 0.5) * 3.5,
+            vy: 1.5 + Math.random() * 3.0,
+            angle: (Math.random() - 0.5) * Math.PI,
+            vAngle: (Math.random() - 0.5) * 0.14,
+            w: 44 + Math.random() * 12,
+            h: 22 + Math.random() * 6,
+            alpha: 1,
+            gravity: 0.11,
+            drag: 0.992,
+            swayPhase: Math.random() * Math.PI * 2
+          });
+        } else if (mode === "bundle") {
+          particles.push({
+            type: "bundle",
+            x: x + (Math.random() - 0.5) * 110,
+            y: y - 60 - Math.random() * 70,
+            vx: (Math.random() - 0.5) * 4.5,
+            vy: 2.2 + Math.random() * 3.5,
+            angle: (Math.random() - 0.5) * 0.7,
+            vAngle: (Math.random() - 0.5) * 0.12,
+            w: 62,
+            h: 34,
+            alpha: 1,
+            gravity: 0.16,
+            drag: 0.995,
+            swayPhase: Math.random() * Math.PI * 2
+          });
+        } else if (mode === "launch") {
+          // 손 중심에서 전방(화면 위쪽 -y 및 좌우 부채꼴)으로 강력하게 발사
+          const spreadAngle = -Math.PI / 2 + (Math.random() - 0.5) * 0.85;
+          const speed = 13 + Math.random() * 9;
+          particles.push({
+            type: Math.random() < 0.65 ? "bundle" : "bill",
+            x: x + (Math.random() - 0.5) * 40,
+            y: y - 10,
+            vx: Math.cos(spreadAngle) * speed,
+            vy: Math.sin(spreadAngle) * speed,
+            angle: spreadAngle + Math.PI / 2,
+            vAngle: (Math.random() - 0.5) * 0.25,
+            w: 64,
+            h: 35,
+            alpha: 1,
+            gravity: 0.22,
+            drag: 0.985,
+            swayPhase: Math.random() * Math.PI * 2
+          });
+        }
+      }
+    }
+
+    function drawBill(p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.globalAlpha = Math.max(0, p.alpha);
+
+      // 지폐 본체
+      const grad = ctx.createLinearGradient(-p.w / 2, 0, p.w / 2, 0);
+      grad.addColorStop(0, "#2ea043");
+      grad.addColorStop(0.5, "#56d364");
+      grad.addColorStop(1, "#238636");
+
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = "#e6ffec";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // 중앙 원형 문양
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.min(p.w, p.h) * 0.26, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawBundle(p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.globalAlpha = Math.max(0, p.alpha);
+
+      // 두툼한 돈다발 입체감(겹쳐진 층)
+      for (let layer = 3; layer >= 0; layer--) {
+        ctx.fillStyle = layer === 0 ? "#3fb950" : "#1f6feb";
+        ctx.fillStyle = layer === 0 ? "#46d160" : (layer % 2 === 0 ? "#2ea043" : "#1b5e20");
+        ctx.strokeStyle = "#d2fedb";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.roundRect(-p.w / 2 + layer * 1.5, -p.h / 2 - layer * 2.5, p.w, p.h, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 돈다발을 묶는 띠지(빨간/금색 띠)
+      ctx.fillStyle = "#f85149";
+      ctx.fillRect(-7, -p.h / 2 - 7.5, 14, p.h + 7.5);
+      ctx.strokeStyle = "#ffdcd7";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-7, -p.h / 2 - 7.5, 14, p.h + 7.5);
+
+      ctx.restore();
+    }
+
+    function updateAndDrawParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.swayPhase += 0.08;
+        p.vx = p.vx * p.drag + (p.type === "bill" ? Math.cos(p.swayPhase) * 0.08 : 0);
+        p.vy = p.vy * p.drag + p.gravity;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.angle += p.vAngle;
+
+        if (p.y > canvas.height + 80 || p.x < -120 || p.x > canvas.width + 120) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        if (p.type === "bill") {
+          drawBill(p);
+        } else {
+          drawBundle(p);
+        }
+      }
+    }
+
+    function drawHandSkeleton(landmarks) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(88, 166, 255, 0.85)";
+      ctx.lineWidth = 2.5;
+
+      for (const [startIdx, endIdx] of HAND_CONNECTIONS) {
+        const a = landmarks[startIdx];
+        const b = landmarks[endIdx];
+        ctx.beginPath();
+        ctx.moveTo(a.x * canvas.width, a.y * canvas.height);
+        ctx.lineTo(b.x * canvas.width, b.y * canvas.height);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        ctx.fillStyle = i === 0 ? "#f85149" : "#ffd33d";
+        ctx.beginPath();
+        ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    /**
+     * 제스처 전환 로직:
+     * 1) 편 상태(OPEN) -> 지폐 쏟아짐
+     * 2) 모은 상태(CLOSED) -> 돈다발 장전(GATHERED_CHARGED)
+     * 3) 장전된 상태에서 다시 편 상태(OPEN) -> 돈다발 쏟아짐 + 전방 발사
+     */
+    function handleGestureTransition(gesture, palmX, palmY) {
+      if (openCooldown > 0) openCooldown--;
+      if (fireCooldown > 0) fireCooldown--;
+
+      if (gesture === "OPEN") {
+        // 손을 모았다가 다시 편 경우: 돈다발 쏟아짐 + 전방 발사!
+        if (sequencePhase === "GATHERED_CHARGED" && fireCooldown === 0) {
+          sequencePhase = "BURST_FIRED";
+          fireCooldown = 25;
+          spawnMoney(palmX, palmY, "bundle", 10);
+          spawnMoney(palmX, palmY, "launch", 14);
+          stateText.textContent = "돈다발 쏟아짐 & 전방 발사!";
+          detailText.textContent = "손을 모았다가 다시 펴서 돈다발을 발사했습니다.";
+          seqText.textContent = "전방 발사 완료 (다시 모아 장전 가능)";
+          seqText.style.color = "#ff7b72";
+        } else {
+          // 완전히 편 상태에서 펴는 동작 -> 지폐 쏟아짐
+          if (currentGesture !== "OPEN" && openCooldown === 0) {
+            openCooldown = 12;
+            spawnMoney(palmX, palmY, "bill", 9);
+          }
+          if (sequencePhase !== "BURST_FIRED") {
+            sequencePhase = "OPEN_POURING";
+            seqText.textContent = "1단계: 지폐 쏟아지는 중";
+            seqText.style.color = "#56d364";
+          }
+          // 편 손 유지 시 지폐가 계속 쏟아지도록 보충
+          if (Math.random() < 0.45) {
+            spawnMoney(palmX, palmY, "bill", 2);
+          }
+          stateText.textContent = "손 펼침 감지 — 지폐 쏟아짐";
+          detailText.textContent = "손을 모았다가 다시 펴면 돈다발이 쏟아지며 전방 발사됩니다.";
+        }
+      } else if (gesture === "CLOSED") {
+        sequencePhase = "GATHERED_CHARGED";
+        stateText.textContent = "손 모음 감지 — 돈다발 장전됨!";
+        detailText.textContent = "이제 손을 다시 펴면 돈다발이 쏟아지며 전방으로 발사됩니다.";
+        seqText.textContent = "2단계: 돈다발 장전 완료";
+        seqText.style.color = "#ffd33d";
+      } else {
+        stateText.textContent = "손 인식 중";
+        detailText.textContent = "손가락을 활짝 펴거나 모아보세요.";
+      }
+
+      if (gesture !== "UNKNOWN") {
+        currentGesture = gesture;
+      }
+    }
+
+    async function initMediaPipe() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.6,
+        minHandPresenceConfidence: 0.6,
+        minTrackingConfidence: 0.6
+      });
+    }
+
+    async function initCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth || 1280;
+          canvas.height = video.videoHeight || 720;
+          resolve();
         };
       });
+      await video.play();
     }
 
-    // 한국어 음성(Web Speech API) 출력 함수
-    function speakKorean(text) {
-      if (!text || !("speechSynthesis" in window)) return;
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "ko-KR";
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+    function renderLoop() {
+      if (video.readyState >= 2 && handLandmarker && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const results = handLandmarker.detectForVideo(video, performance.now());
 
-        const voices = window.speechSynthesis.getVoices();
-        const koVoice = voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ko"));
-        if (koVoice) {
-          utterance.voice = koVoice;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (results.landmarks && results.landmarks.length > 0) {
+          for (const landmarks of results.landmarks) {
+            drawHandSkeleton(landmarks);
+            const palm = landmarks[9];
+            const palmX = palm.x * canvas.width;
+            const palmY = palm.y * canvas.height;
+            const gesture = classifyHand(landmarks);
+            handleGestureTransition(gesture, palmX, palmY);
+          }
+        } else {
+          stateText.textContent = "손을 카메라 앞에 보여주세요";
+          detailText.textContent = "전면 카메라에 손 전체가 나오도록 위치시켜 주세요.";
         }
 
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn("음성 출력 오류:", err);
-      }
-    }
-
-    // 확정 상태 반영 (화면 표시 + 상태 전환 시 1회 음성 출력)
-    function applyConfirmedState(newState) {
-      const prevState = confirmedState;
-      confirmedState = newState;
-
-      // 막대그래프 확정 표시 업데이트
-      LABELS.forEach((lbl) => {
-        barElements[lbl].item.classList.toggle("is-confirmed", lbl === newState);
-      });
-
-      // 화면 인사말 업데이트
-      greetingBanner.classList.remove("state-yang", "state-kwon", "state-bg");
-      if (newState === "양선진") {
-        greetingBanner.classList.add("state-yang");
-        stateLabelEl.textContent = "확정 상태: [양선진]";
-        greetingTextEl.textContent = GREETINGS["양선진"];
-      } else if (newState === "권규리") {
-        greetingBanner.classList.add("state-kwon");
-        stateLabelEl.textContent = "확정 상태: [권규리]";
-        greetingTextEl.textContent = GREETINGS["권규리"];
+        updateAndDrawParticles();
       } else {
-        greetingBanner.classList.add("state-bg");
-        stateLabelEl.textContent = "확정 상태: [배경] (사람 없음)";
-        greetingTextEl.textContent = "사람이 감지되지 않았습니다.";
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        updateAndDrawParticles();
       }
 
-      // 이전 상태와 다른 상태로 바뀔 때만 1회 말하기 ([배경]은 말하지 않음)
-      if (newState !== prevState) {
-        if (newState === "양선진" || newState === "권규리") {
-          speakKorean(GREETINGS[newState]);
-        }
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    async function bootstrap() {
+      try {
+        await initCamera();
+        await initMediaPipe();
+        stateText.textContent = "준비 완료 — 손을 펴거나 모아보세요";
+        detailText.textContent = "편 상태 → 지폐 쏟아짐 / 모았다가 다시 펴기 → 돈다발 쏟아짐 & 전방 발사";
+        renderLoop();
+      } catch (err) {
+        console.error(err);
+        stateText.textContent = "초기화 오류";
+        detailText.textContent =
+          err.name === "NotAllowedError"
+            ? "카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라를 허용해 주세요."
+            : "카메라 또는 MediaPipe 모델을 불러오는 중 문제가 발생했습니다.";
       }
     }
 
-    // 예측 결과 처리 및 연속 프레임 안정화
-    function handlePredictions(predictions) {
-      const probMap = {
-        "양선진": 0,
-        "권규리": 0,
-        "배경": 0
-      };
+    bootstrap();
 
-      predictions.forEach((p) => {
-        const key = normalizeLabel(p.className);
-        if (key) {
-          probMap[key] += p.probability;
-        }
-      });
-
-      // 각 레이블 막대그래프 갱신
-      LABELS.forEach((label) => {
+    window.addEventListener("beforeunload", () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((t) => t.stop());
+      }
+    });
+  </script>
+</body>
+</html>
