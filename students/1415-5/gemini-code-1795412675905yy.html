@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediaPipe 손 인식 검붉은 에너지 & 번개·칼날 웹앱</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #070203;
+      color: #f8e8ea;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      overflow: hidden;
+    }
+
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #1b0508 0%, #070203 75%);
+    }
+
+    video {
+      display: none;
+    }
+
+    canvas#outputCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hud-top {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 10;
+      gap: 12px;
+    }
+
+    .panel {
+      background: rgba(18, 4, 7, 0.72);
+      border: 1px solid rgba(210, 35, 58, 0.35);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 12px 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55), inset 0 0 18px rgba(160, 10, 28, 0.14);
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #ffccd2;
+      margin-bottom: 4px;
+    }
+
+    .status {
+      font-size: 12.5px;
+      color: #e6a6ae;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff2a46;
+      box-shadow: 0 0 10px #ff2a46;
+      flex-shrink: 0;
+    }
+
+    .dot.ok {
+      background: #ff5c72;
+      box-shadow: 0 0 12px #ff3855;
+    }
+
+    .controls {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      background: linear-gradient(135deg, #5c0914 0%, #2a0409 100%);
+      color: #ffe3e7;
+      border: 1px solid rgba(255, 65, 90, 0.45);
+      border-radius: 10px;
+      padding: 8px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    button:hover {
+      border-color: rgba(255, 110, 130, 0.8);
+      box-shadow: 0 0 14px rgba(220, 25, 50, 0.35);
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    .hud-bottom {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 10;
+      text-align: center;
+      max-width: 92vw;
+    }
+
+    .guide {
+      display: inline-flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      font-size: 12.5px;
+      color: #f3c4ca;
+    }
+
+    .guide span strong {
+      color: #ff586e;
+    }
+
+    .overlay-msg {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8, 2, 4, 0.86);
+      z-index: 20;
+      padding: 24px;
+      text-align: center;
+      gap: 14px;
+    }
+
+    .overlay-msg.hidden {
+      display: none;
+    }
+
+    .overlay-msg h2 {
+      font-size: 20px;
+      color: #ffd4d9;
+    }
+
+    .overlay-msg p {
+      max-width: 460px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #dca6ad;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="outputCanvas"></canvas>
+
+    <div class="hud-top">
+      <div class="panel">
+        <div class="title">CRIMSON CORE · HAND FX</div>
+        <div class="status">
+          <span id="statusDot" class="dot"></span>
+          <span id="statusText">MediaPipe Tasks-Vision 초기화 중...</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="toggleSkeletonBtn" type="button">관절 가이드: ON</button>
+        <button id="restartCamBtn" type="button">카메라 재시작</button>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="panel guide">
+        <span><strong>주먹 쥠</strong>: 검붉은 에너지 공 응축</span>
+        <span><strong>손 핌</strong>: 주변으로 검붉은 번개 &amp; 칼날 방출</span>
+      </div>
+    </div>
+
+    <div id="overlayMsg" class="overlay-msg">
+      <h2>전면 카메라 및 손 추적을 준비 중입니다</h2>
+      <p id="overlayDesc">브라우저에서 카메라 권한을 허용해 주세요. 손바닥 중심을 기준으로 에너지 공이 생성됩니다.</p>
+      <button id="retryBtn" type="button" style="display:none;">다시 시도</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      HandLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    const videoEl = document.getElementById("webcam");
+    const canvasEl = document.getElementById("outputCanvas");
+    const ctx = canvasEl.getContext("2d");
+
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const overlayMsg = document.getElementById("overlayMsg");
+    const overlayDesc = document.getElementById("overlayDesc");
+    const retryBtn = document.getElementById("retryBtn");
+    const toggleSkeletonBtn = document.getElementById("toggleSkeletonBtn");
+    const restartCamBtn = document.getElementById("restartCamBtn");
+
+    let showSkeleton = true;
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let stream = null;
+    let animId = null;
+
+    // 손 상태 관리 (최대 2손 지원)
+    const handStates = new Map();
+
+    // 퍼져나가는 검붉은 칼날 & 번개 파티클/투사체 풀
+    const blades = [];
+    const lightningBursts = [];
+    const embers = [];
+
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+    function setStatus(text, active = false) {
+      statusText.textContent = text;
+      statusDot.classList.toggle("ok", active);
+    }
+
+    function showError(msg) {
+      overlayMsg.classList.remove("hidden");
+      overlayDesc.textContent = msg;
+      retryBtn.style.display = "inline-block";
+      setStatus("오류 발생", false);
+    }
+
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      canvasEl.width = Math.floor(width * dpr);
+      canvasEl.height = Math.floor(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    toggleSkeletonBtn.addEventListener("click", () => {
+      showSkeleton = !showSkeleton;
+      toggleSkeletonBtn.textContent = `관절 가이드: ${showSkeleton ? "ON" : "OFF"}`;
+    });
+
+    restartCamBtn.addEventListener("click", () => {
+      initCameraAndModel();
+    });
+
+    retryBtn.addEventListener("click", () => {
+      retryBtn.style.display = "none";
+      overlayMsg.classList.add("hidden");
+      initCameraAndModel();
+    });
+
+    async function initHandLandmarker() {
+      if (handLandmarker) return handLandmarker;
+      setStatus("MediaPipe Vision WASM & 모델 로딩 중...", false);
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55
+      });
+      return handLandmarker;
+    }
+
+    async function initCamera() {
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+      setStatus("전면 카메라 연결 중...", false);
+      const constraints = {
+        audio: false,
+        video: {
+          facingMode: { ideal: "user" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoEl.srcObject = stream;
+      await new Promise((resolve) => {
+        if (videoEl.readyState >= 2) return resolve();
+        videoEl.onloadedmetadata = () => resolve();
+      });
+      await videoEl.play();
+    }
+
+    async function initCameraAndModel() {
+      try {
+        if (animId) {
+          cancelAnimationFrame(animId);
+          animId = null;
+        }
+        await Promise.all([initHandLandmarker(), initCamera()]);
+        overlayMsg.classList.add("hidden");
+        setStatus("실시간 손 추적 활성 (주먹=응축 / 펼침=방출)", true);
+        lastVideoTime = -1;
+        loop();
+      } catch (err) {
+        console.error(err);
+        showError(
+          `카메라 또는 손 인식 모델을 시작할 수 없습니다. (${err?.message || "권한 또는 HTTPS 환경 확인 필요"})`
+        );
+      }
+    }
+
+    // 랜드마크 좌표 -> 캔버스 좌표 변환 (전면 카메라 거울 모드 + object-cover 매핑)
+    function landmarkToCanvas(lm) {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const vidW = videoEl.videoWidth || 1280;
+      const vidH = videoEl.videoHeight || 720;
+
+      const scale = Math.max(vw / vidW, vh / vidH);
+      const drawW = vidW * scale;
+      const drawH = vidH * scale;
+      const offsetX = (vw - drawW) * 0.5;
+      const offsetY = (vh - drawH) * 0.5;
+
+      // 거울 모드이므로 x를 반전
+      const mirroredX = 1 - lm.x;
+      return {
+        x: offsetX + mirroredX * drawW,
+        y: offsetY + lm.y * drawH
+      };
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    // 손가락 펼침/주먹 정도 계산 (0 = 완전 주먹, 1 = 완전 펼침)
+    function computeOpenness(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmScale = Math.max(dist(wrist, middleMcp), 0.02);
+
+      const fingerPairs = [
+        [8, 5],   // 검지
+        [12, 9],  // 중지
+        [16, 13], // 약지
+        [20, 17]  // 소지
+      ];
+
+      let extensionSum = 0;
+      for (const [tipIdx, mcpIdx] of fingerPairs) {
+        const tipDist = dist(wrist, landmarks[tipIdx]);
+        const mcpDist = dist(wrist, landmarks[mcpIdx]);
+        const ratio = (tipDist - mcpDist * 0.85) / (palmScale * 1.15);
+        extensionSum += Math.max(0, Math.min(1, ratio));
+      }
+
+      // 엄지 (팁 4와 검지 MCP 5 거리)
+      const thumbRatio = (dist(landmarks[4], landmarks[5]) / palmScale - 0.35) / 0.85;
+      extensionSum += Math.max(0, Math.min(1, thumbRatio)) * 0.85;
+
+      return Math.max(0, Math.min(1, extensionSum / 4.85));
+    }
+
+    // 손바닥 중심점 계산 (손목 0과 중지 MCP 9 및 검지/약지 MCP 평균)
+    function computePalmCenter(landmarks) {
+      const indices = [0, 5, 9, 13, 17];
+      let sx = 0, sy = 0;
+      for (const idx of indices) {
+        const p = landmarkToCanvas(landmarks[idx]);
+        sx += p.x;
+        sy += p.y;
+      }
+      return {
+        x: sx / indices.length,
+        y: sy / indices.length - 8
+      };
+    }
+
+    // 검붉은 번개 폴리라인 생성
+    function createLightningBolt(x1, y1, x2, y2, segments = 9, jitter = 28) {
+      const pts = [{ x: x1, y: y1 }];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      for (let i = 1; i < segments; i++) {
+        const t = i / segments;
+        const envelope = Math.sin(t * Math.PI);
+        const offset = (Math.random() - 0.5) * 2 * jitter * envelope;
+        pts.push({
+          x: x1 + dx * t + nx * offset,
+          y: y1 + dy * t + ny * offset
+        });
+      }
+      pts.push({ x: x2, y: y2 });
+      return pts;
+    }
+
+    // 손을 펼칠 때 에너지 공 중심에서 검붉은 칼날과 번개 방출
+    function releaseCrimsonSlashAndLightning(cx, cy, chargePower) {
+      const bladeCount = Math.round(7 + chargePower * 8);
+      const baseAngle = Math.random() * Math.PI * 2;
+
+      for (let i = 0; i < bladeCount; i++) {
+        const spread = ((Math.PI * 2) / bladeCount) * i + (Math.random() - 0.5) * 0.35;
+        const angle = baseAngle + spread;
+        const speed = 11 + Math.random() * 11 + chargePower * 7;
+        const length = 65 + Math.random() * 65 + chargePower * 45;
+        const width = 12 + Math.random() * 12 + chargePower * 8;
+
+        blades.push({
+          x: cx + Math.cos(angle) * 14,
+          y: cy + Math.sin(angle) * 14,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          angle,
+          length,
+          width,
+          alpha: 1,
+          life: 1,
+          decay: 0.022 + Math.random() * 0.014,
+          curve: (Math.random() - 0.5) * 0.35
+        });
+      }
+
+      // 방사형 검붉은 번개 생성
+      const boltCount = Math.round(6 + chargePower * 7);
+      for (let b = 0; b < boltCount; b++) {
+        const angle = (Math.PI * 2 / boltCount) * b + (Math.random() - 0.5) * 0.4;
+        const reach = 120 + Math.random() * 170 + chargePower * 120;
+        const tx = cx + Math.cos(angle) * reach;
+        const ty = cy + Math.sin(angle) * reach;
+
+        lightningBursts.push({
+          points: createLightningBolt(cx, cy, tx, ty, 10, 32),
+          life: 1,
+          decay: 0.055 + Math.random() * 0.035,
+          thickness: 2 + Math.random() * 2.5 + chargePower * 1.5
+        });
+      }
+
+      // 붉은 불꽃/잔광 입자
+      for (let p = 0; p < 24; p++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 3 + Math.random() * 9;
+        embers.push({
+          x: cx,
+          y: cy,
+          vx: Math.cos(a) * spd,
+          vy: Math.sin(a) * spd,
+          r: 2 + Math.random() * 3.5,
+          life: 1,
+          decay: 0.025 + Math.random() * 0.02
+        });
+      }
+    }
+
+    // 검붉은 에너지 공 렌더링
+    function drawCrimsonEnergyOrb(x, y, charge, timeSec) {
+      const baseRadius = 18 + charge * 42;
+      const pulse = Math.sin(timeSec * 12) * (2.5 + charge * 4);
+      const radius = Math.max(10, baseRadius + pulse);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // 외곽 검붉은 글로우
+      const outerGrad = ctx.createRadialGradient(x, y, radius * 0.15, x, y, radius * 2.4);
+      outerGrad.addColorStop(0, "rgba(255, 60, 80, 0.85)");
+      outerGrad.addColorStop(0.35, "rgba(155, 8, 24, 0.55)");
+      outerGrad.addColorStop(0.7, "rgba(75, 2, 10, 0.22)");
+      outerGrad.addColorStop(1, "rgba(20, 0, 3, 0)");
+
+      ctx.fillStyle = outerGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 응축 코어 구체
+      const coreGrad = ctx.createRadialGradient(
+        x - radius * 0.25,
+        y - radius * 0.25,
+        radius * 0.05,
+        x,
+        y,
+        radius
+      );
+      coreGrad.addColorStop(0, "rgba(255, 190, 198, 0.95)");
+      coreGrad.addColorStop(0.28, "rgba(220, 20, 45, 0.92)");
+      coreGrad.addColorStop(0.72, "rgba(105, 4, 15, 0.95)");
+      coreGrad.addColorStop(1, "rgba(38, 1, 6, 0.98)");
+
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 에너지 공 표면 감도는 작은 검붉은 스파크
+      if (charge > 0.2) {
+        const sparkCount = Math.floor(2 + charge * 4);
+        for (let i = 0; i < sparkCount; i++) {
+          const a1 = timeSec * (5 + i) + i * 1.7;
+          const a2 = a1 + 0.7 + Math.random() * 0.5;
+          const rOrb = radius * (0.75 + Math.random() * 0.35);
+          const p1 = { x: x + Math.cos(a1) * rOrb, y: y + Math.sin(a1) * rOrb };
+          const p2 = { x: x + Math.cos(a2) * rOrb, y: y + Math.sin(a2) * rOrb };
+          const bolt = createLightningBolt(p1.x, p1.y, p2.x, p2.y, 4, 8);
+
+          ctx.strokeStyle = "rgba(255, 85, 105, 0.85)";
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          bolt.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    // 검붉은 칼날 투사체 렌더링
+    function drawCrimsonBlade(blade) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.translate(blade.x, blade.y);
+      ctx.rotate(blade.angle);
+
+      const halfLen = blade.length * 0.5;
+      const halfW = blade.width * 0.5;
+
+      // 외곽 붉은 잔광
+      ctx.shadowColor = "rgba(220, 15, 38, 0.9)";
+      ctx.shadowBlur = 16;
+
+      // 초승달/검기 형태의 날카로운 칼날
+      const grad = ctx.createLinearGradient(-halfLen, 0, halfLen, 0);
+      grad.addColorStop(0, "rgba(55, 2, 8, 0)");
+      grad.addColorStop(0.35, `rgba(140, 8, 22, ${blade.life * 0.75})`);
+      grad.addColorStop(0.78, `rgba(235, 28, 52, ${blade.life * 0.95})`);
+      grad.addColorStop(1, `rgba(255, 175, 185, ${blade.life})`);
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(halfLen, 0);
+      ctx.quadraticCurveTo(0, -halfW * 1.15, -halfLen, -halfW * 0.25);
+      ctx.quadraticCurveTo(-halfLen * 0.2, halfW * 0.35, halfLen, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // 칼날 하단 엣지
+      ctx.fillStyle = `rgba(180, 12, 30, ${blade.life * 0.7})`;
+      ctx.beginPath();
+      ctx.moveTo(halfLen, 0);
+      ctx.quadraticCurveTo(0, halfW * 0.95, -halfLen, halfW * 0.25);
+      ctx.quadraticCurveTo(-halfLen * 0.2, -halfW * 0.2, halfLen, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 번개 및 불꽃 업데이트/렌더링
+    function updateAndDrawEffects() {
+      // 1. 번개
+      for (let i = lightningBursts.length - 1; i >= 0; i--) {
+        const b = lightningBursts[i];
+        b.life -= b.decay;
+        if (b.life <= 0) {
+          lightningBursts.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // 딥 레드 외곽 번개
+        ctx.strokeStyle = `rgba(175, 10, 28, ${b.life * 0.85})`;
+        ctx.lineWidth = b.thickness * 3.2;
+        ctx.beginPath();
+        b.points.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+
+        // 밝은 크림슨 코어 번개
+        ctx.strokeStyle = `rgba(255, 110, 125, ${b.life})`;
+        ctx.lineWidth = b.thickness;
+        ctx.beginPath();
+        b.points.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      // 2. 칼날
+      for (let i = blades.length - 1; i >= 0; i--) {
+        const bl = blades[i];
+        bl.x += bl.vx;
+        bl.y += bl.vy;
+        bl.angle += bl.curve * 0.04;
+        bl.vx *= 0.992;
+        bl.vy *= 0.992;
+        bl.life -= bl.decay;
+
+        if (bl.life <= 0) {
+          blades.splice(i, 1);
+          continue;
+        }
+        drawCrimsonBlade(bl);
+      }
+
+      // 3. 불꽃 입자
+      for (let i = embers.length - 1; i >= 0; i--) {
+        const em = embers[i];
+        em.x += em.vx;
+        em.y += em.vy;
+        em.vx *= 0.96;
+        em.vy *= 0.96;
+        em.life -= em.decay;
+
+        if (em.life <= 0) {
+          embers.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = `rgba(235, 30, 52, ${em.life})`;
+        ctx.beginPath();
+        ctx.arc(em.x, em.y, em.r * em.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawHandSkeleton(landmarks) {
+      if (!showSkeleton) return;
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 95, 115, 0.35)";
+      ctx.lineWidth = 1.5;
+
+      for (const [a, b] of HAND_CONNECTIONS) {
+        const pa = landmarkToCanvas(landmarks[a]);
+        const pb = landmarkToCanvas(landmarks[b]);
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < landmarks.length; i++) {
+        const p = landmarkToCanvas(landmarks[i]);
+        ctx.fillStyle = "rgba(255, 150, 162, 0.65)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawCameraFrame() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const vidW = videoEl.videoWidth || 1280;
+      const vidH = videoEl.videoHeight || 720;
+
+      const scale = Math.max(vw / vidW, vh / vidH);
+      const drawW = vidW * scale;
+      const drawH = vidH * scale;
+      const offsetX = (vw - drawW) * 0.5;
+      const offsetY = (vh - drawH) * 0.5;
+
+      ctx.save();
+      // 전면 카메라 좌우 반전
+      ctx.translate(offsetX + drawW, offsetY);
+      ctx.scale(-1, 1);
+      ctx.drawImage(videoEl, 0, 0, drawW, drawH);
+      ctx.restore();
+
+      // 검붉은 분위기 오버레이
+      ctx.fillStyle = "rgba(16, 2, 5, 0.28)";
+      ctx.fillRect(0, 0, vw, vh);
+    }
+
+    function loop() {
+      const nowMs = performance.now();
+      const timeSec = nowMs * 0.001;
+
+      drawCameraFrame();
+
+      if (handLandmarker && videoEl.readyState >= 2 && videoEl.currentTime !== lastVideoTime) {
+        lastVideoTime = videoEl.currentTime;
+        const results = handLandmarker.detectForVideo(videoEl, nowMs);
+        const activeKeys = new Set();
+
+        const landmarksList = results.landmarks || [];
+        landmarksList.forEach((lm, idx) => {
+          const handednessLabel =
+            results.handednesses?.[idx]?.[0]?.categoryName || `Hand_${idx}`;
+          const key = `${handednessLabel}_${idx}`;
+          activeKeys.add(key);
+
+          let state = handStates.get(key);
+          if (!state) {
+            state = {
+              x: 0,
+              y: 0,
+              initialized: false,
+              charge: 0,       // 0 ~ 1 (주먹 쥐면 증가)
+              wasFist: false,
+              releaseCooldown: 0
+            };
+            handStates.set(key, state);
+          }
+
+          const palm = computePalmCenter(lm);
+          if (!state.initialized) {
+            state.x = palm.x;
+            state.y = palm.y;
+            state.initialized = true;
+          } else {
+            state.x += (palm.x - state.x) * 0.35;
+            state.y += (palm.y - state.y) * 0.35;
+          }
+
+          const openness = computeOpenness(lm); // 0에 가까울수록 주먹, 1에 가까울수록 손 펼침
+          const isFist = openness < 0.36;
+          const isOpen = openness > 0.62;
+
+          if (state.releaseCooldown > 0) {
+            state.releaseCooldown -= 1;
+          }
+
+          if (isFist) {
+            // 손을 주먹쥐면 검붉은 에너지 공 응축
+            state.charge = Math.min(1, state.charge + 0.045);
+            state.wasFist = true;
+          } else if (isOpen && state.charge > 0.12 && state.releaseCooldown === 0) {
+            // 손을 펴면 에너지 공을 중심으로 주변에 검붉은 번개와 칼날 방출
+            releaseCrimsonSlashAndLightning(state.x, state.y, state.charge);
+            state.charge = 0;
+            state.wasFist = false;
+            state.releaseCooldown = 14;
+          } else {
+            // 중간 상태에서는 서서히 에너지 감쇠
+            state.charge = Math.max(0, state.charge - 0.018);
+          }
+
+          drawHandSkeleton(lm);
+
+          if (state.charge > 0.03) {
+            drawCrimsonEnergyOrb(state.x, state.y, state.charge, timeSec);
+          }
+        });
+
+        // 사라진 손 상태 정리
+        for (const [key, state] of handStates.entries()) {
+          if (!activeKeys.has(key)) {
+            state.charge *= 0.85;
+            if (state.charge > 0.04) {
+              drawCrimsonEnergyOrb(state.x, state.y, state.charge, timeSec);
+            } else {
+              handStates.delete(key);
+            }
+          }
+        }
+      } else {
+        // 프레임 간에도 기존 응축된 공 유지
+        for (const state of handStates.values()) {
+          if (state.charge > 0.03) {
+            drawCrimsonEnergyOrb(state.x, state.y, state.charge, timeSec);
+          }
+        }
+      }
+
+      updateAndDrawEffects();
+      animId = requestAnimationFrame(loop);
+    }
+
+    initCameraAndModel();
+  </script>
+</body>
+</html>
