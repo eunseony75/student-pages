@@ -1,0 +1,1268 @@
+<<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediaPipe 손 인식 네온 에너지 & 레이저 고스트 헌터</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #07080d;
+      color: #f3f5ff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #121524 0%, #06070c 100%);
+    }
+
+    video {
+      display: none;
+    }
+
+    canvas#fxCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hud {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .panel {
+      background: rgba(12, 14, 24, 0.72);
+      border: 1px solid rgba(255, 70, 95, 0.28);
+      backdrop-filter: blur(10px);
+      border-radius: 14px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #ff2e55;
+      box-shadow: 0 0 10px #ff2e55;
+    }
+
+    .guide {
+      margin-top: 6px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #c7cee6;
+    }
+
+    .guide strong {
+      color: #ff6b86;
+    }
+
+    .status-box {
+      text-align: right;
+      min-width: 185px;
+    }
+
+    .score-line {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffd6de;
+      margin-bottom: 6px;
+    }
+
+    .score-line span {
+      color: #ff4d6d;
+      font-size: 16px;
+    }
+
+    .state-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      background: rgba(255, 46, 85, 0.16);
+      border: 1px solid rgba(255, 46, 85, 0.45);
+      color: #ff859b;
+    }
+
+    .charge-meter {
+      margin-top: 8px;
+      width: 185px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+
+    .charge-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ff1e42, #ff6a88, #ffffff);
+      box-shadow: 0 0 12px #ff2e55;
+      transition: width 0.05s linear;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+
+    button {
+      pointer-events: auto;
+      background: rgba(20, 24, 40, 0.85);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      padding: 9px 16px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      border-color: rgba(255, 65, 100, 0.65);
+      background: rgba(36, 22, 34, 0.9);
+    }
+
+    .overlay-msg {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(6, 7, 12, 0.82);
+      z-index: 20;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .overlay-msg.hidden {
+      display: none;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid rgba(255, 255, 255, 0.16);
+      border-top-color: #ff2e55;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="fxCanvas"></canvas>
+  </div>
+
+  <div class="hud">
+    <div class="panel">
+      <div class="title"><span class="dot"></span>NEON LASER GHOST BLASTER</div>
+      <div class="guide">
+        1. <strong>손을 활짝 펴서</strong> 준비하세요 (보자기)<br />
+        2. <strong>손을 오므리면</strong> 빨간 네온 구체 충전 + 충전음<br />
+        3. <strong>다시 손을 펴면</strong> 굵은 레이저 빔 발사 → 도망치는 유령 포획!
+      </div>
+    </div>
+
+    <div class="panel status-box">
+      <div class="score-line">포획한 유령: <span id="catchCount">0</span></div>
+      <div id="stateBadge" class="state-badge">대기 중 · 손을 펴세요</div>
+      <div class="charge-meter">
+        <div id="chargeFill" class="charge-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="toggleSoundBtn">효과음: ON</button>
+    <button id="toggleSkeletonBtn">랜드마크 표시: ON</button>
+    <button id="resetBtn">상태 초기화</button>
+  </div>
+
+  <div id="loadingOverlay" class="overlay-msg">
+    <div class="spinner"></div>
+    <div id="loadingText">전면 카메라 및 MediaPipe HandLandmarker 초기화 중...</div>
+  </div>
+
+  <script type="module">
+    import {
+      FilesetResolver,
+      HandLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("fxCanvas");
+    const ctx = canvas.getContext("2d");
+    const catchCountEl = document.getElementById("catchCount");
+    const stateBadge = document.getElementById("stateBadge");
+    const chargeFill = document.getElementById("chargeFill");
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingText = document.getElementById("loadingText");
+    const toggleSoundBtn = document.getElementById("toggleSoundBtn");
+    const toggleSkeletonBtn = document.getElementById("toggleSkeletonBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    let showSkeleton = true;
+    let soundEnabled = true;
+    let catchCount = 0;
+
+    toggleSkeletonBtn.addEventListener("click", () => {
+      showSkeleton = !showSkeleton;
+      toggleSkeletonBtn.textContent = `랜드마크 표시: ${showSkeleton ? "ON" : "OFF"}`;
+    });
+
+    toggleSoundBtn.addEventListener("click", () => {
+      soundEnabled = !soundEnabled;
+      toggleSoundBtn.textContent = `효과음: ${soundEnabled ? "ON" : "OFF"}`;
+      if (soundEnabled) ensureAudioContext();
+    });
+
+    // =========================================================
+    // Web Audio API 효과음 엔진 (에너지 충전음 & 유령 포획/구름 소멸음)
+    // =========================================================
+    let audioCtx = null;
+    let chargeOsc = null;
+    let chargeSubOsc = null;
+    let chargeGain = null;
+    let lastChargeTickTime = 0;
+
+    function ensureAudioContext() {
+      if (!soundEnabled) return null;
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    window.addEventListener("pointerdown", () => ensureAudioContext(), { once: false });
+
+    function updateChargeSound(isCharging, power, nowSec) {
+      if (!soundEnabled || !isCharging) {
+        stopChargeSound();
+        return;
+      }
+
+      const ctxAudio = ensureAudioContext();
+      if (!ctxAudio) return;
+
+      if (!chargeOsc) {
+        chargeOsc = ctxAudio.createOscillator();
+        chargeSubOsc = ctxAudio.createOscillator();
+        chargeGain = ctxAudio.createGain();
+
+        chargeOsc.type = "sawtooth";
+        chargeSubOsc.type = "sine";
+
+        const filter = ctxAudio.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 950;
+
+        chargeGain.gain.setValueAtTime(0.001, ctxAudio.currentTime);
+
+        chargeOsc.connect(filter);
+        chargeSubOsc.connect(filter);
+        filter.connect(chargeGain);
+        chargeGain.connect(ctxAudio.destination);
+
+        chargeOsc.start();
+        chargeSubOsc.start();
+      }
+
+      const t = ctxAudio.currentTime;
+      const baseFreq = 160 + power * 520;
+      chargeOsc.frequency.setTargetAtTime(baseFreq, t, 0.04);
+      chargeSubOsc.frequency.setTargetAtTime(baseFreq * 1.5, t, 0.04);
+      chargeGain.gain.setTargetAtTime(0.035 + power * 0.055, t, 0.04);
+
+      if (nowSec - lastChargeTickTime > 0.14 - power * 0.07) {
+        lastChargeTickTime = nowSec;
+        playChargePulse(power);
+      }
+    }
+
+    function playChargePulse(power) {
+      const ctxAudio = ensureAudioContext();
+      if (!ctxAudio) return;
+
+      const t = ctxAudio.currentTime;
+      const osc = ctxAudio.createOscillator();
+      const gain = ctxAudio.createGain();
+
+      osc.type = "triangle";
+      const startFreq = 320 + power * 540;
+      osc.frequency.setValueAtTime(startFreq, t);
+      osc.frequency.exponentialRampToValueAtTime(startFreq * 1.38, t + 0.07);
+
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.045, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0008, t + 0.075);
+
+      osc.connect(gain);
+      gain.connect(ctxAudio.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+
+    function stopChargeSound() {
+      if (chargeGain && audioCtx) {
+        chargeGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.03);
+      }
+    }
+
+    function playLaserShootSound(power) {
+      if (!soundEnabled) return;
+      const ctxAudio = ensureAudioContext();
+      if (!ctxAudio) return;
+
+      const t = ctxAudio.currentTime;
+      const osc = ctxAudio.createOscillator();
+      const gain = ctxAudio.createGain();
+
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(740 + power * 320, t);
+      osc.frequency.exponentialRampToValueAtTime(85, t + 0.32);
+
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+
+      osc.connect(gain);
+      gain.connect(ctxAudio.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.35);
+    }
+
+    function playGhostCaptureSound() {
+      if (!soundEnabled) return;
+      const ctxAudio = ensureAudioContext();
+      if (!ctxAudio) return;
+
+      const t = ctxAudio.currentTime;
+
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, idx) => {
+        const osc = ctxAudio.createOscillator();
+        const gain = ctxAudio.createGain();
+        const start = t + idx * 0.045;
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.linearRampToValueAtTime(0.085, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.22);
+
+        osc.connect(gain);
+        gain.connect(ctxAudio.destination);
+
+        osc.start(start);
+        osc.stop(start + 0.24);
+      });
+
+      const bufferSize = Math.floor(ctxAudio.sampleRate * 0.45);
+      const noiseBuffer = ctxAudio.createBuffer(1, bufferSize, ctxAudio.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.45));
+      }
+
+      const noiseSource = ctxAudio.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const bandpass = ctxAudio.createBiquadFilter();
+      bandpass.type = "bandpass";
+      bandpass.frequency.setValueAtTime(480, t);
+      bandpass.frequency.exponentialRampToValueAtTime(1250, t + 0.35);
+      bandpass.Q.value = 1.4;
+
+      const noiseGain = ctxAudio.createGain();
+      noiseGain.gain.setValueAtTime(0.001, t);
+      noiseGain.gain.linearRampToValueAtTime(0.11, t + 0.04);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.44);
+
+      noiseSource.connect(bandpass);
+      bandpass.connect(noiseGain);
+      noiseGain.connect(ctxAudio.destination);
+
+      noiseSource.start(t);
+    }
+
+    // =========================================================
+    // 상태 머신 및 엔티티 (유령, 구름 이펙트, 파티클)
+    // =========================================================
+    const STATE = {
+      IDLE: "IDLE",
+      OPEN_READY: "OPEN_READY",
+      CHARGING: "CHARGING",
+      FIRING: "FIRING"
+    };
+
+    let currentState = STATE.IDLE;
+    let charge = 0;
+    let firedPower = 0;
+    let beamTimer = 0;
+    const BEAM_DURATION = 0.72;
+    let screenShake = 0;
+
+    let palmPos = { x: 0, y: 0, valid: false };
+    let aimDir = { x: 0, y: -1 };
+    let currentBeamSegment = null;
+
+    const particles = [];
+    const ghosts = [];
+    const clouds = [];
+    let ghostSpawnTimer = 0;
+    const MAX_GHOSTS = 5;
+
+    function createGhost(spawnFromEdge = true) {
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+      const margin = 80;
+
+      let x = margin + Math.random() * Math.max(100, viewW - margin * 2);
+      let y = margin + Math.random() * Math.max(100, viewH - margin * 2);
+
+      if (spawnFromEdge) {
+        const edge = Math.floor(Math.random() * 4);
+        if (edge === 0) { x = Math.random() * viewW; y = -35; }
+        else if (edge === 1) { x = viewW + 35; y = Math.random() * viewH; }
+        else if (edge === 2) { x = Math.random() * viewW; y = viewH + 35; }
+        else { x = -35; y = Math.random() * viewH; }
+      }
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 75 + Math.random() * 65;
+
+      return {
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: 32 + Math.random() * 8,
+        wobblePhase: Math.random() * Math.PI * 2,
+        fleeTimer: 0,
+        tint: Math.random() > 0.35 ? "#d8e2ff" : "#ffd6e7"
+      };
+    }
+
+    function initGhosts() {
+      ghosts.length = 0;
+      for (let i = 0; i < 3; i++) {
+        ghosts.push(createGhost(false));
+      }
+    }
+
+    function spawnCloudEffect(x, y, baseRadius = 38) {
+      const puffs = [];
+      const puffCount = 9;
+      for (let i = 0; i < puffCount; i++) {
+        const angle = (Math.PI * 2 * i) / puffCount + (Math.random() - 0.5) * 0.4;
+        const distSpeed = 25 + Math.random() * 65;
+        puffs.push({
+          ox: Math.cos(angle) * (baseRadius * 0.35),
+          oy: Math.sin(angle) * (baseRadius * 0.35),
+          vx: Math.cos(angle) * distSpeed,
+          vy: Math.sin(angle) * distSpeed - 28,
+          r: baseRadius * (0.42 + Math.random() * 0.32)
+        });
+      }
+
+      clouds.push({
+        x,
+        y,
+        age: 0,
+        duration: 0.95,
+        puffs
+      });
+    }
+
+    function resetState() {
+      currentState = STATE.IDLE;
+      charge = 0;
+      firedPower = 0;
+      beamTimer = 0;
+      screenShake = 0;
+      catchCount = 0;
+      catchCountEl.textContent = "0";
+      currentBeamSegment = null;
+      stopChargeSound();
+      initGhosts();
+      updateHud();
+    }
+
+    resetBtn.addEventListener("click", resetState);
+
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    initGhosts();
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+      const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+      if (l2 === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = x1 + t * (x2 - x1);
+      const projY = y1 + t * (y2 - y1);
+      return Math.hypot(px - projX, py - projY);
+    }
+
+    function analyzeHand(landmarks) {
+      const wrist = landmarks[0];
+      const middleMcp = landmarks[9];
+      const palmScale = Math.max(dist(wrist, middleMcp), 0.04);
+
+      const fingerTips = [8, 12, 16, 20];
+      const fingerPips = [6, 10, 14, 18];
+
+      let extendedCount = 0;
+      let foldedCount = 0;
+      let extensionSum = 0;
+
+      for (let i = 0; i < fingerTips.length; i++) {
+        const tip = landmarks[fingerTips[i]];
+        const pip = landmarks[fingerPips[i]];
+        const tipToWrist = dist(tip, wrist) / palmScale;
+        const pipToWrist = dist(pip, wrist) / palmScale;
+        extensionSum += tipToWrist;
+
+        if (tipToWrist > 1.48 && tipToWrist > pipToWrist * 1.08) {
+          extendedCount++;
+        } else if (tipToWrist < 1.22) {
+          foldedCount++;
+        }
+      }
+
+      const thumbTip = landmarks[4];
+      const indexMcp = landmarks[5];
+      const thumbRatio = dist(thumbTip, indexMcp) / palmScale;
+      if (thumbRatio > 0.58) extendedCount++;
+      else if (thumbRatio < 0.45) foldedCount++;
+
+      const avgExtension = extensionSum / fingerTips.length;
+      const isOpenHand = extendedCount >= 3 && avgExtension >= 1.45;
+      const isFist = foldedCount >= 3 && avgExtension <= 1.24;
+
+      const cxNorm = (wrist.x + landmarks[5].x + landmarks[17].x) / 3;
+      const cyNorm = (wrist.y + landmarks[5].y + landmarks[17].y) / 3;
+
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+      const palmX = (1 - cxNorm) * viewW;
+      const palmY = cyNorm * viewH;
+
+      let dx = -(middleMcp.x - wrist.x) * viewW;
+      let dy = (middleMcp.y - wrist.y) * viewH;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+
+      return { isOpenHand, isFist, palmX, palmY, dx, dy };
+    }
+
+    function triggerLaserFire(power) {
+      const clampedPower = Math.max(0.35, Math.min(1, power));
+      currentState = STATE.FIRING;
+      firedPower = clampedPower;
+      beamTimer = BEAM_DURATION * (0.65 + 0.35 * clampedPower);
+      screenShake = 14 + clampedPower * 14;
+      playLaserShootSound(clampedPower);
+      spawnBeamSparks(palmPos.x, palmPos.y, aimDir.x, aimDir.y, clampedPower);
+    }
+
+    function updateStateMachine(dt, handInfo, nowSec) {
+      if (currentState === STATE.FIRING) {
+        stopChargeSound();
+        beamTimer -= dt;
+        charge = Math.max(0, beamTimer / BEAM_DURATION);
+        if (beamTimer <= 0) {
+          currentState = handInfo?.isOpenHand ? STATE.OPEN_READY : STATE.IDLE;
+          charge = 0;
+          firedPower = 0;
+          currentBeamSegment = null;
+        }
+        updateHud();
+        return;
+      }
+
+      if (!handInfo) {
+        if (currentState === STATE.CHARGING) {
+          charge = Math.max(0, charge - dt * 0.35);
+          if (charge <= 0) {
+            currentState = STATE.IDLE;
+            stopChargeSound();
+          } else {
+            updateChargeSound(true, charge, nowSec);
+          }
+        } else {
+          stopChargeSound();
+        }
+        updateHud();
+        return;
+      }
+
+      palmPos = { x: handInfo.palmX, y: handInfo.palmY, valid: true };
+      aimDir = { x: handInfo.dx, y: handInfo.dy };
+
+      if (currentState === STATE.IDLE) {
+        stopChargeSound();
+        if (handInfo.isOpenHand) {
+          currentState = STATE.OPEN_READY;
+        }
+      } else if (currentState === STATE.OPEN_READY) {
+        stopChargeSound();
+        if (handInfo.isFist) {
+          currentState = STATE.CHARGING;
+        }
+      } else if (currentState === STATE.CHARGING) {
+        if (handInfo.isFist) {
+          charge = Math.min(1, charge + dt * 1.05);
+          spawnChargeParticles(palmPos.x, palmPos.y, charge);
+          updateChargeSound(true, charge, nowSec);
+        } else if (handInfo.isOpenHand) {
+          // 손을 다시 펴면 굵은 레이저 빔 발사!
+          stopChargeSound();
+          triggerLaserFire(Math.max(0.45, charge));
+        }
+      }
+
+      updateHud();
+    }
+
+    function updateHud() {
+      const pct = Math.round(charge * 100);
+      chargeFill.style.width = `${pct}%`;
+
+      if (currentState === STATE.IDLE) {
+        stateBadge.textContent = "대기 중 · 손을 펴세요";
+        stateBadge.style.color = "#b8c2e0";
+        stateBadge.style.borderColor = "rgba(184, 194, 224, 0.35)";
+      } else if (currentState === STATE.OPEN_READY) {
+        stateBadge.textContent = "준비 완료 · 손을 오므리세요";
+        stateBadge.style.color = "#ff9eb0";
+        stateBadge.style.borderColor = "rgba(255, 65, 105, 0.55)";
+      } else if (currentState === STATE.CHARGING) {
+        stateBadge.textContent = `구체 충전 중 ${pct}% · 펴면 레이저!`;
+        stateBadge.style.color = "#ff4d6d";
+        stateBadge.style.borderColor = "rgba(255, 30, 66, 0.85)";
+      } else if (currentState === STATE.FIRING) {
+        stateBadge.textContent = "굵은 레이저 발사 중!";
+        stateBadge.style.color = "#ffffff";
+        stateBadge.style.borderColor = "#ff2e55";
+      }
+    }
+
+    function updateGhostsAndCapture(dt) {
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+
+      ghostSpawnTimer += dt;
+      if (ghostSpawnTimer >= 2.0 && ghosts.length < MAX_GHOSTS) {
+        ghostSpawnTimer = 0;
+        ghosts.push(createGhost(true));
+      }
+
+      for (let i = ghosts.length - 1; i >= 0; i--) {
+        const g = ghosts[i];
+        g.wobblePhase += dt * 5.5;
+
+        const toGhostX = g.x - palmPos.x;
+        const toGhostY = g.y - palmPos.y;
+        const distToPalm = Math.hypot(toGhostX, toGhostY) || 1;
+
+        if (palmPos.valid && distToPalm < 235) {
+          g.fleeTimer = 0.65;
+          const fleeSpeed = 240;
+          const targetVx = (toGhostX / distToPalm) * fleeSpeed;
+          const targetVy = (toGhostY / distToPalm) * fleeSpeed;
+          g.vx += (targetVx - g.vx) * Math.min(1, dt * 6);
+          g.vy += (targetVy - g.vy) * Math.min(1, dt * 6);
+        } else if (g.fleeTimer > 0) {
+          g.fleeTimer -= dt;
+        } else {
+          const turn = (Math.random() - 0.5) * 2.2 * dt;
+          const cosT = Math.cos(turn);
+          const sinT = Math.sin(turn);
+          const nvx = g.vx * cosT - g.vy * sinT;
+          const nvy = g.vx * sinT + g.vy * cosT;
+          const curSpeed = Math.hypot(nvx, nvy) || 95;
+          const desiredSpeed = Math.max(80, Math.min(130, curSpeed));
+          g.vx = (nvx / curSpeed) * desiredSpeed;
+          g.vy = (nvy / curSpeed) * desiredSpeed;
+        }
+
+        g.x += g.vx * dt;
+        g.y += g.vy * dt + Math.sin(g.wobblePhase) * 24 * dt;
+
+        const pad = g.radius + 16;
+        if (g.x < pad) {
+          g.x = pad;
+          g.vx = Math.abs(g.vx);
+        } else if (g.x > viewW - pad) {
+          g.x = viewW - pad;
+          g.vx = -Math.abs(g.vx);
+        }
+
+        if (g.y < pad) {
+          g.y = pad;
+          g.vy = Math.abs(g.vy);
+        } else if (g.y > viewH - pad) {
+          g.y = viewH - pad;
+          g.vy = -Math.abs(g.vy);
+        }
+
+        // 발사된 굵은 레이저 빔에 맞았을 때 포획
+        let caughtByLaser = false;
+        if (currentState === STATE.FIRING && currentBeamSegment) {
+          const dBeam = pointToSegmentDist(
+            g.x,
+            g.y,
+            currentBeamSegment.x1,
+            currentBeamSegment.y1,
+            currentBeamSegment.x2,
+            currentBeamSegment.y2
+          );
+          if (dBeam <= g.radius + currentBeamSegment.radius) {
+            caughtByLaser = true;
+          }
+        }
+
+        if (caughtByLaser) {
+          catchCount++;
+          catchCountEl.textContent = String(catchCount);
+          spawnCloudEffect(g.x, g.y, g.radius * 1.15);
+          spawnBeamSparks(g.x, g.y, g.vx, g.vy, 0.7);
+          playGhostCaptureSound();
+          ghosts.splice(i, 1);
+        }
+      }
+    }
+
+    function drawGhosts(timeSec) {
+      for (const g of ghosts) {
+        const r = g.radius;
+        const bobY = Math.sin(timeSec * 4.5 + g.wobblePhase) * 4;
+        const gx = g.x;
+        const gy = g.y + bobY;
+
+        ctx.save();
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "rgba(180, 205, 255, 0.55)";
+
+        ctx.beginPath();
+        ctx.arc(gx, gy - r * 0.15, r, Math.PI, 0, false);
+
+        const waves = 3;
+        const bottomY = gy + r * 0.95;
+        const startX = gx + r;
+        const stepX = (r * 2) / waves;
+
+        for (let w = 0; w < waves; w++) {
+          const xStart = startX - w * stepX;
+          const xMid = xStart - stepX * 0.5;
+          const xEnd = xStart - stepX;
+          const waveDip = Math.sin(timeSec * 10 + g.wobblePhase + w) * 4;
+          ctx.quadraticCurveTo(xMid, bottomY + 7 + waveDip, xEnd, bottomY);
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = g.tint;
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        const lookX = Math.max(-4, Math.min(4, g.vx * 0.025));
+        const lookY = Math.max(-3, Math.min(3, g.vy * 0.025));
+
+        ctx.fillStyle = "#181c2e";
+        ctx.beginPath();
+        ctx.ellipse(gx - r * 0.32 + lookX, gy - r * 0.15 + lookY, r * 0.14, r * 0.2, 0, 0, Math.PI * 2);
+        ctx.ellipse(gx + r * 0.32 + lookX, gy - r * 0.15 + lookY, r * 0.14, r * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 110, 140, 0.45)";
+        ctx.beginPath();
+        ctx.arc(gx - r * 0.52 + lookX, gy + r * 0.08 + lookY, r * 0.11, 0, Math.PI * 2);
+        ctx.arc(gx + r * 0.52 + lookX, gy + r * 0.08 + lookY, r * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    function updateAndDrawClouds(dt) {
+      for (let i = clouds.length - 1; i >= 0; i--) {
+        const c = clouds[i];
+        c.age += dt;
+        if (c.age >= c.duration) {
+          clouds.splice(i, 1);
+          continue;
+        }
+
+        const progress = c.age / c.duration;
+        const alpha = progress < 0.2 ? progress / 0.2 : Math.max(0, 1 - (progress - 0.2) / 0.8);
+
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.92;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = "rgba(255, 255, 255, 0.45)";
+
+        for (const p of c.puffs) {
+          p.ox += p.vx * dt;
+          p.oy += p.vy * dt;
+          p.vx *= 0.93;
+          p.vy *= 0.93;
+
+          const currentR = p.r * (0.8 + progress * 0.65);
+          const grad = ctx.createRadialGradient(
+            c.x + p.ox,
+            c.y + p.oy,
+            currentR * 0.1,
+            c.x + p.ox,
+            c.y + p.oy,
+            currentR
+          );
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.7, "#eef3ff");
+          grad.addColorStop(1, "rgba(215, 226, 255, 0)");
+
+          ctx.beginPath();
+          ctx.arc(c.x + p.ox, c.y + p.oy, currentR, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    function spawnChargeParticles(x, y, power) {
+      const count = 2 + Math.floor(power * 4);
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 55 + Math.random() * 65;
+        particles.push({
+          x: x + Math.cos(angle) * radius,
+          y: y + Math.sin(angle) * radius,
+          targetX: x,
+          targetY: y,
+          vx: 0,
+          vy: 0,
+          life: 0.28 + Math.random() * 0.2,
+          maxLife: 0.48,
+          size: 2 + Math.random() * 3.2,
+          inward: true,
+          color: Math.random() > 0.25 ? "#ff1e42" : "#ff99ac"
+        });
+      }
+    }
+
+    function spawnBeamSparks(x, y, dx, dy, power) {
+      const baseAngle = Math.atan2(dy, dx);
+      const count = 28 + Math.floor(power * 24);
+      for (let i = 0; i < count; i++) {
+        const spread = (Math.random() - 0.5) * 0.9;
+        const speed = 260 + Math.random() * 680 * (0.6 + power);
+        const a = baseAngle + spread;
+        particles.push({
+          x,
+          y,
+          targetX: 0,
+          targetY: 0,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: 0.25 + Math.random() * 0.35,
+          maxLife: 0.6,
+          size: 2.5 + Math.random() * 4,
+          inward: false,
+          color: Math.random() > 0.3 ? "#ff2e55" : "#ffd6de"
+        });
+      }
+    }
+
+    function updateAndDrawParticles(dt) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        if (p.inward) {
+          p.x += (p.targetX - p.x) * Math.min(1, dt * 11);
+          p.y += (p.targetY - p.y) * Math.min(1, dt * 11);
+        } else {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.95;
+          p.vy *= 0.95;
+        }
+
+        const alpha = Math.max(0, p.life / p.maxLife);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = "#ff1e42";
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function drawHandSkeleton(landmarks) {
+      if (!showSkeleton || !landmarks) return;
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+
+      const connections = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [5, 9], [9, 10], [10, 11], [11, 12],
+        [9, 13], [13, 14], [14, 15], [15, 16],
+        [13, 17], [17, 18], [18, 19], [19, 20],
+        [0, 17]
+      ];
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 90, 120, 0.45)";
+      ctx.lineWidth = 2;
+
+      for (const [a, b] of connections) {
+        const pa = landmarks[a];
+        const pb = landmarks[b];
+        ctx.beginPath();
+        ctx.moveTo((1 - pa.x) * viewW, pa.y * viewH);
+        ctx.lineTo((1 - pb.x) * viewW, pb.y * viewH);
+        ctx.stroke();
+      }
+
+      for (const lm of landmarks) {
+        ctx.beginPath();
+        ctx.arc((1 - lm.x) * viewW, lm.y * viewH, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#ff758f";
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawNeonSphere(x, y, power, timeSec) {
+      if (power <= 0.01) return;
+
+      const baseRadius = 14 + power * 42;
+      const pulse = Math.sin(timeSec * 18) * (2.5 + power * 4);
+      const radius = Math.max(8, baseRadius + pulse);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      const outerGrad = ctx.createRadialGradient(x, y, radius * 0.15, x, y, radius * 2.2);
+      outerGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+      outerGrad.addColorStop(0.25, "rgba(255, 50, 90, 0.85)");
+      outerGrad.addColorStop(0.65, "rgba(255, 16, 56, 0.35)");
+      outerGrad.addColorStop(1, "rgba(255, 0, 40, 0)");
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = outerGrad;
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(255, 110, 138, ${0.45 + power * 0.5})`;
+      ctx.lineWidth = 2.2;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "#ff1e42";
+
+      ctx.beginPath();
+      ctx.ellipse(x, y, radius * 1.35, radius * 0.55, timeSec * 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(x, y, radius * 1.35, radius * 0.55, -timeSec * 3.5 + 1.1, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.58, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff0f3";
+      ctx.shadowBlur = 24;
+      ctx.shadowColor = "#ff2e55";
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawLaserBeam(x, y, dx, dy, power, remainingRatio, timeSec) {
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+      const beamLength = Math.hypot(viewW, viewH) * 1.5;
+
+      let dirX = dx;
+      let dirY = dy;
+      if (dirY > 0.35) {
+        dirY = -0.85;
+        const n = Math.hypot(dirX, dirY) || 1;
+        dirX /= n;
+        dirY /= n;
+      }
+
+      const endX = x + dirX * beamLength;
+      const endY = y + dirY * beamLength;
+
+      const thickness = (46 + power * 64) * Math.max(0.25, Math.min(1, remainingRatio * 2.4));
+      const jitter = Math.sin(timeSec * 55) * 4;
+
+      currentBeamSegment = {
+        x1: x,
+        y1: y,
+        x2: endX,
+        y2: endY,
+        radius: thickness * 0.95
+      };
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(endX + jitter, endY + jitter);
+      ctx.strokeStyle = "rgba(255, 20, 60, 0.34)";
+      ctx.lineWidth = thickness * 2.6;
+      ctx.shadowBlur = 48;
+      ctx.shadowColor = "#ff1e42";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(endX, endY);
+      ctx.strokeStyle = "rgba(255, 46, 85, 0.92)";
+      ctx.lineWidth = thickness * 1.25;
+      ctx.shadowBlur = 32;
+      ctx.shadowColor = "#ff2e55";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(endX, endY);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = Math.max(10, thickness * 0.46);
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "#ffccd5";
+      ctx.stroke();
+
+      const muzzleRadius = thickness * 1.05;
+      const muzzleGrad = ctx.createRadialGradient(x, y, 2, x, y, muzzleRadius);
+      muzzleGrad.addColorStop(0, "rgba(255, 255, 255, 1)");
+      muzzleGrad.addColorStop(0.45, "rgba(255, 55, 95, 0.88)");
+      muzzleGrad.addColorStop(1, "rgba(255, 0, 45, 0)");
+
+      ctx.beginPath();
+      ctx.arc(x, y, muzzleRadius, 0, Math.PI * 2);
+      ctx.fillStyle = muzzleGrad;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    let handLandmarker = null;
+    let lastVideoTime = -1;
+    let lastFrameTime = performance.now();
+
+    async function initMediaPipeAndCamera() {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+          minHandDetectionConfidence: 0.55,
+          minHandPresenceConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+
+        loadingText.textContent = "전면 카메라 권한을 요청하는 중...";
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        palmPos = {
+          x: window.innerWidth * 0.5,
+          y: window.innerHeight * 0.55,
+          valid: true
+        };
+
+        loadingOverlay.classList.add("hidden");
+        requestAnimationFrame(renderLoop);
+      } catch (err) {
+        console.error(err);
+        loadingText.innerHTML =
+          `초기화 실패: ${err.message || err}<br/>` +
+          `<span style="font-size:12px;color:#ff9aa9;">HTTPS 또는 localhost 환경에서 카메라 권한을 허용해 주세요.</span>`;
+      }
+    }
+
+    function drawMirroredVideoCover() {
+      const viewW = window.innerWidth;
+      const viewH = window.innerHeight;
+      const vw = video.videoWidth || 1280;
+      const vh = video.videoHeight || 720;
+
+      const scale = Math.max(viewW / vw, viewH / vh);
+      const drawW = vw * scale;
+      const drawH = vh * scale;
+      const offsetX = (viewW - drawW) * 0.5;
+      const offsetY = (viewH - drawH) * 0.5;
+
+      ctx.save();
+      ctx.translate(viewW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+      ctx.restore();
+
+      ctx.fillStyle = "rgba(8, 10, 18, 0.25)";
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    function renderLoop(now) {
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+      const timeSec = now / 1000;
+
+      let handInfo = null;
+      let primaryLandmarks = null;
+
+      if (handLandmarker && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const results = handLandmarker.detectForVideo(video, now);
+        if (results.landmarks && results.landmarks.length > 0) {
+          primaryLandmarks = results.landmarks[0];
+          handInfo = analyzeHand(primaryLandmarks);
+        }
+      }
+
+      updateStateMachine(dt, handInfo, timeSec);
+      updateGhostsAndCapture(dt);
+
+      ctx.save();
+      if (screenShake > 0.2) {
+        const sx = (Math.random() - 0.5) * screenShake;
+        const sy = (Math.random() - 0.5) * screenShake;
+        ctx.translate(sx, sy);
+        screenShake *= 0.86;
+      } else {
+        screenShake = 0;
+      }
+
+      drawMirroredVideoCover();
+      drawGhosts(timeSec);
+      drawHandSkeleton(primaryLandmarks);
+
+      if (currentState === STATE.CHARGING) {
+        drawNeonSphere(palmPos.x, palmPos.y, charge, timeSec);
+      }
+
+      if (currentState === STATE.FIRING) {
+        const totalDuration = BEAM_DURATION * (0.65 + 0.35 * firedPower);
+        const remainingRatio = Math.max(0, beamTimer / totalDuration);
+        drawLaserBeam(palmPos.x, palmPos.y, aimDir.x, aimDir.y, firedPower, remainingRatio, timeSec);
+      }
+
+      updateAndDrawClouds(dt);
+      updateAndDrawParticles(dt);
+      ctx.restore();
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    initMediaPipeAndCamera();
+  </script>
+</body>
+</html>
